@@ -96,6 +96,80 @@ tailorai/
 - **React Router** - Client-side routing
 - **CSS3** - Modern styling with gradients, animations, and flexbox/grid
 
+## Deploying to Github Pages
+### Prerequisites
+
+- You must have a GitHub account and push your code to a GitHub repository.
+- Ensure your `package.json` has a `"homepage"` field set to `https://<your-username>.github.io/<your-repo>/`.
+- Install the `gh-pages` package as a dev dependency:
+   ```bash
+   npm install --save-dev gh-pages
+   ```
+
+### Update `package.json` Scripts
+
+Add the following scripts to your `package.json`:
+```json
+"scripts": {
+   "predeploy": "npm run build",
+   "deploy": "gh-pages -d dist"
+}
+```
+
+### Configure Vite for GitHub Pages
+
+In your `vite.config.js`, set the `base` option to your repo name:
+```js
+export default defineConfig({
+   base: '/<your-repo>/',
+   // ...other config
+});
+```
+
+### Manual Deployment
+
+To deploy manually, run:
+```bash
+npm run deploy
+```
+
+### Deploy Automatically with GitHub Actions
+
+Create a workflow file at `.github/workflows/deploy.yml`:
+
+```yaml
+name: Deploy to GitHub Pages
+
+on:
+   push:
+      branches:
+         - main
+
+jobs:
+   deploy:
+      runs-on: ubuntu-latest
+      steps:
+         - uses: actions/checkout@v4
+         - uses: actions/setup-node@v4
+            with:
+               node-version: 18
+         - run: npm ci
+         - run: npm run build
+         - uses: peaceiris/actions-gh-pages@v4
+            with:
+               github_token: ${{ secrets.GITHUB_TOKEN }}
+               publish_dir: ./dist
+```
+
+After pushing to `main`, your site will be automatically deployed to GitHub Pages.
+
+### Enable GitHub Pages
+
+1. Go to your repository's **Settings** > **Pages**.
+2. Set the source branch to `gh-pages` and the folder to `/ (root)`.
+
+Your app will be live at `https://<your-username>.github.io/<your-repo>/`.
+
 ## Features in Detail
 
 ### Landing Page
@@ -131,9 +205,6 @@ TailorAI works on all modern browsers:
 - [ ] Application tracking dashboard
 - [ ] Export to PDF
 
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## License
 
@@ -145,4 +216,4 @@ For questions or feedback, please open an issue on GitHub.
 
 ---
 
-Built with ❤️ using React and Vite
+Built with using React and Vite
