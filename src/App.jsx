@@ -1,7 +1,11 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { Routes, Route, HashRouter, BrowserRouter } from 'react-router-dom';
 import LandingPage from './pages/LandingPage';
 import Register from './pages/Register';
 import './App.css';
+
+
+const Router =
+  process.env.NODE_ENV === 'production' ? HashRouter : BrowserRouter;
 
 function App() {
   return (
