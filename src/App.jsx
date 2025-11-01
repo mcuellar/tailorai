@@ -1,6 +1,7 @@
 import { Routes, Route, HashRouter, BrowserRouter } from 'react-router-dom';
 import LandingPage from './pages/LandingPage';
 import Register from './pages/Register';
+import Dashboard from './pages/Dashboard';
 import './App.css';
 
 
@@ -14,6 +15,7 @@ function App() {
         <Route path="/" element={<LandingPage />} />
         <Route path="/register" element={<Register />} />
         <Route path="/login" element={<Register />} /> {/* Placeholder for login */}
+        <Route path="/dashboard" element={<Dashboard />} />
       </Routes>
     </Router>
   );
