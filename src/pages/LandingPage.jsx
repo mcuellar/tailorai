@@ -1,7 +1,19 @@
 import { Link } from 'react-router-dom';
+import { useEffect } from 'react';
 import './LandingPage.css';
 
 function LandingPage() {
+  useEffect(() => {
+    const onHashChange = () => {
+      const el = document.getElementById(window.location.hash.replace('#', ''));
+      if (el) el.scrollIntoView({ behavior: 'smooth' });
+    };
+    window.addEventListener('hashchange', onHashChange);
+    // Initial scroll
+    onHashChange();
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, []);
+
   return (
     <div className="landing-page">
       <nav className="navbar">
