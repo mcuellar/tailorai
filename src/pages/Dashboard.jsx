@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import './Dashboard.css';
 
 const JobsIcon = () => (
@@ -112,14 +112,56 @@ const SIDEBAR_MODES = [
 ];
 
 const NAV_ITEMS = [
-  { id: 'jobs', label: 'Jobs', icon: JobsIcon, isActive: true },
-  { id: 'billing', label: 'Billing', icon: BillingIcon, isActive: false },
-  { id: 'settings', label: 'Settings', icon: SettingsIcon, isActive: false },
+  {
+    id: 'jobs',
+    label: 'Jobs',
+    icon: JobsIcon,
+    to: '/dashboard',
+    description: 'Manage job tailoring workflows in one place.',
+    end: true,
+  },
+  {
+    id: 'billing',
+    label: 'Billing',
+    icon: BillingIcon,
+    to: '/dashboard/billing',
+    description: 'Billing plans, invoices, and usage insights.',
+    end: false,
+  },
+  {
+    id: 'settings',
+    label: 'Settings',
+    icon: SettingsIcon,
+    to: '/dashboard/settings',
+    description: 'Configure TailorAI preferences and integrations.',
+    end: false,
+  },
 ];
 
 function Dashboard() {
   const [theme, setTheme] = useState('light');
   const [sidebarMode, setSidebarMode] = useState('expanded');
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
+  const location = useLocation();
+
+  useEffect(() => {
+    const handleResize = () => {
+      if (typeof window !== 'undefined' && window.innerWidth > 768) {
+        setIsMobileNavOpen(false);
+      }
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('resize', handleResize);
+      handleResize();
+    }
+
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('resize', handleResize);
+      }
+    };
+  }, []);
   const toggleTheme = () => {
     setTheme(prev => (prev === 'light' ? 'dark' : 'light'));
   };
@@ -128,9 +170,37 @@ function Dashboard() {
     setSidebarMode(mode);
   };
 
+  const handleMobileToggle = () => {
+    setIsMobileNavOpen(prev => !prev);
+  };
+
+  const closeMobileNav = () => {
+    setIsMobileNavOpen(false);
+  };
+
+  const dashboardClasses = [
+    'dashboard',
+    `dashboard--${theme}`,
+    `sidebar-${sidebarMode}`,
+    isMobileNavOpen ? 'dashboard--mobile-open' : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+
+  const normalizedPath = location.pathname.replace(/\/+/g, '/').replace(/\/$/, '') || '/';
+  const activeItem =
+    NAV_ITEMS.find(item =>
+      item.end
+        ? normalizedPath === item.to
+        : normalizedPath === item.to || normalizedPath.startsWith(`${item.to}/`),
+    ) || NAV_ITEMS[0];
+
   return (
-    <div className={`dashboard dashboard--${theme} sidebar-${sidebarMode}`}>
-      <aside className={`dashboard-sidebar dashboard-sidebar--${sidebarMode}`}>
+    <div className={dashboardClasses}>
+      <aside
+        id="dashboard-sidebar"
+        className={`dashboard-sidebar dashboard-sidebar--${sidebarMode}${isMobileNavOpen ? ' is-open' : ''}`}
+      >
         <div className="sidebar-header">
           <Link to="/" className="sidebar-logo">
             <span className="sidebar-logo-icon" aria-hidden="true">
@@ -152,17 +222,20 @@ function Dashboard() {
 
         <nav className="sidebar-nav" aria-label="Primary">
           {NAV_ITEMS.map(item => (
-            <button
+            <NavLink
               key={item.id}
-              type="button"
-              className={`sidebar-nav-item${item.isActive ? ' is-active' : ''}`}
-              aria-current={item.isActive ? 'page' : undefined}
+              to={item.to}
+              end={item.end}
+              className={({ isActive }) =>
+                `sidebar-nav-item${isActive ? ' is-active' : ''}`
+              }
+              onClick={closeMobileNav}
             >
               <span className="sidebar-nav-icon">
                 <item.icon />
               </span>
               <span className="sidebar-nav-label">{item.label}</span>
-            </button>
+            </NavLink>
           ))}
         </nav>
 
@@ -190,11 +263,32 @@ function Dashboard() {
         </div>
       </aside>
 
+      <div
+        className="dashboard-overlay"
+        aria-hidden={isMobileNavOpen ? 'false' : 'true'}
+        onClick={closeMobileNav}
+      />
+
       <main className="dashboard-main">
         <header className="dashboard-topbar">
+          <button
+            type="button"
+            className="mobile-menu-toggle"
+            onClick={handleMobileToggle}
+            aria-expanded={isMobileNavOpen}
+            aria-controls="dashboard-sidebar"
+            aria-label="Toggle navigation"
+          >
+            <span className="mobile-menu-icon" aria-hidden="true">
+              <span />
+              <span />
+              <span />
+            </span>
+            <span className="mobile-menu-label">Menu</span>
+          </button>
           <div className="topbar-heading">
-            <h1>Jobs</h1>
-            <p>Manage job tailoring workflows in one place.</p>
+            <h1>{activeItem.label}</h1>
+            <p>{activeItem.description}</p>
           </div>
           <div className="topbar-actions">
             <button type="button" className="theme-toggle" onClick={toggleTheme}>
@@ -207,18 +301,7 @@ function Dashboard() {
           </div>
         </header>
 
-        <section className="dashboard-content">
-          <article className="dashboard-card">
-            <div className="card-header">
-              <h2>Jobs</h2>
-              <span className="card-status">Under Construction</span>
-            </div>
-            <p>
-              This area will display tailored job matches, resume insights, and workflow automations
-              once the dashboard is connected to live data.
-            </p>
-          </article>
-        </section>
+        <Outlet />
       </main>
     </div>
   );

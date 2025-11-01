@@ -5,11 +5,16 @@
   color: #1f2333;
   transition: background 0.4s ease, color 0.4s ease;
   font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  position: relative;
 }
 
 .dashboard--dark {
   background: linear-gradient(135deg, #111626 0%, #1f2333 100%);
   color: #f6f2eb;
+}
+
+.dashboard--mobile-open {
+  overflow: hidden;
 }
 
 .dashboard-sidebar {
@@ -21,6 +26,64 @@
   padding: 1.5rem 1.25rem;
   transition: width 0.3s ease, padding 0.3s ease;
   width: 272px;
+}
+
+.mobile-menu-toggle {
+  display: none;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.6rem 1rem;
+  border-radius: 0.9rem;
+  border: 1px solid rgba(31, 35, 51, 0.12);
+  background: rgba(246, 242, 235, 0.92);
+  color: #1f2333;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.mobile-menu-toggle:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(31, 35, 51, 0.18);
+}
+
+.dashboard--dark .mobile-menu-toggle {
+  background: rgba(19, 23, 34, 0.85);
+  color: #fdfbf7;
+  border-color: rgba(212, 175, 112, 0.35);
+}
+
+.mobile-menu-icon {
+  display: inline-flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.25rem;
+}
+
+.mobile-menu-icon span {
+  display: block;
+  width: 18px;
+  height: 2px;
+  background: currentColor;
+  border-radius: 999px;
+}
+
+.mobile-menu-label {
+  font-size: 0.9rem;
+}
+
+.dashboard-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 900;
+  display: none;
+  pointer-events: none;
+}
+
+.dashboard--mobile-open .dashboard-overlay {
+  display: block;
+  pointer-events: auto;
 }
 
 .dashboard--light .dashboard-sidebar {
@@ -104,6 +167,7 @@
   text-align: left;
   cursor: pointer;
   transition: background 0.3s ease, transform 0.3s ease, color 0.3s ease;
+  text-decoration: none;
 }
 
 .sidebar-nav-item:hover {
@@ -375,41 +439,74 @@
     flex-direction: column;
   }
 
-  .dashboard-sidebar,
+  .dashboard-sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 260px;
+    max-width: 80%;
+    padding: 2rem 1.5rem;
+    transform: translateX(-100%);
+    transition: transform 0.3s ease, box-shadow 0.3s ease, width 0.3s ease, padding 0.3s ease;
+    z-index: 950;
+    overflow-y: auto;
+  }
+
+  .dashboard-sidebar.is-open,
+  .dashboard--mobile-open .dashboard-sidebar {
+    transform: translateX(0);
+    box-shadow: 12px 0 36px rgba(31, 35, 51, 0.28);
+  }
+
   .dashboard-sidebar--collapsed,
   .sidebar-hover .dashboard-sidebar,
   .sidebar-hover .dashboard-sidebar:hover {
-    width: 100%;
-    flex-direction: row;
-    align-items: center;
-    justify-content: space-between;
+    width: 260px;
+    padding: 2rem 1.5rem;
+  }
+
+  .dashboard-sidebar--collapsed .sidebar-logo-text,
+  .sidebar-hover .dashboard-sidebar:not(:hover) .sidebar-logo-text,
+  .dashboard-sidebar--collapsed .sidebar-nav-label,
+  .sidebar-hover .dashboard-sidebar:not(:hover) .sidebar-nav-label,
+  .dashboard-sidebar--collapsed .sidebar-footer-label,
+  .sidebar-hover .dashboard-sidebar:not(:hover) .sidebar-footer-label,
+  .dashboard-sidebar--collapsed .sidebar-toggle-option span,
+  .sidebar-hover .dashboard-sidebar:not(:hover) .sidebar-toggle-option span {
+    display: inline;
   }
 
   .sidebar-nav {
-    flex-direction: row;
-    gap: 0.5rem;
+    flex-direction: column;
+    gap: 1rem;
   }
 
   .sidebar-nav-item,
   .dashboard-sidebar--collapsed .sidebar-nav-item,
   .sidebar-hover .dashboard-sidebar:not(:hover) .sidebar-nav-item {
-    padding: 0.65rem 0.85rem;
+    justify-content: flex-start;
+    padding: 0.65rem 0.8rem;
+    width: 100%;
+    gap: 0.75rem;
+  }
+
+  .mobile-menu-toggle {
+    display: inline-flex;
   }
 
   .sidebar-footer {
-    flex-direction: row;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.5rem 1rem;
+    display: none;
   }
 
   .dashboard-main {
-    padding: 1.25rem;
+    padding: 1.5rem 1.25rem;
   }
 
   .dashboard-topbar {
     flex-direction: column;
-    align-items: flex-start;
+    align-items: stretch;
+    gap: 1.25rem;
   }
 
   .topbar-actions {
