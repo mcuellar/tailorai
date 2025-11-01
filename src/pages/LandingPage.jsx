@@ -1,18 +1,31 @@
-import { Link } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useEffect } from 'react';
 import './LandingPage.css';
 
+
+function scrollToSection(section) {
+  const el = document.getElementById(section);
+  if (el) el.scrollIntoView({ behavior: 'smooth' });
+}
+
 function LandingPage() {
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  // Scroll to section if ?scroll=... is present
   useEffect(() => {
-    const onHashChange = () => {
-      const el = document.getElementById(window.location.hash.replace('#', ''));
-      if (el) el.scrollIntoView({ behavior: 'smooth' });
-    };
-    window.addEventListener('hashchange', onHashChange);
-    // Initial scroll
-    onHashChange();
-    return () => window.removeEventListener('hashchange', onHashChange);
-  }, []);
+    const params = new URLSearchParams(location.search);
+    const section = params.get('scroll');
+    if (section) {
+      scrollToSection(section);
+    }
+  }, [location]);
+
+  // Handler for anchor links
+  const handleNavClick = (e, section) => {
+    e.preventDefault();
+    navigate(`/?scroll=${section}`);
+  };
 
   return (
     <div className="landing-page">
@@ -35,8 +48,8 @@ function LandingPage() {
             <span className="logo-text">TailorAI</span>
           </div>
           <div className="nav-links">
-            <a href="#features" className="nav-link">Features</a>
-            <a href="#how-it-works" className="nav-link">How It Works</a>
+            <a href="/?scroll=features" className="nav-link" onClick={e => handleNavClick(e, 'features')}>Features</a>
+            <a href="/?scroll=how-it-works" className="nav-link" onClick={e => handleNavClick(e, 'how-it-works')}>How It Works</a>
             <Link to="/register" className="btn-primary">Get Started</Link>
           </div>
         </div>
@@ -54,7 +67,7 @@ function LandingPage() {
             </p>
             <div className="hero-cta">
               <Link to="/register" className="btn-cta">Start Optimizing Free</Link>
-              <a href="#how-it-works" className="btn-secondary">Learn More</a>
+              <a href="/?scroll=how-it-works" className="btn-secondary" onClick={e => handleNavClick(e, 'how-it-works')}>Learn More</a>
             </div>
             <div className="hero-badges">
               <div className="badge">
