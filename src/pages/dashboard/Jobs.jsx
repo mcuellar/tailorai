@@ -11,6 +11,7 @@ function DashboardJobs() {
   const [selectedJobId, setSelectedJobId] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState(null);
+  const [pendingDeleteJob, setPendingDeleteJob] = useState(null);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -101,6 +102,32 @@ function DashboardJobs() {
 
   const handleSelectJob = jobId => {
     setSelectedJobId(jobId);
+  };
+
+  const handleDeleteRequest = job => {
+    setPendingDeleteJob(job);
+  };
+
+  const handleDeleteCancel = () => {
+    setPendingDeleteJob(null);
+  };
+
+  const handleDeleteConfirm = () => {
+    if (!pendingDeleteJob) {
+      return;
+    }
+
+    const jobId = pendingDeleteJob.id;
+
+    setJobs(prev => {
+      const updated = prev.filter(item => item.id !== jobId);
+      if (selectedJobId === jobId) {
+        setSelectedJobId(updated[0]?.id ?? null);
+      }
+      return updated;
+    });
+
+    setPendingDeleteJob(null);
   };
 
   const getJobTitle = job => {
@@ -207,6 +234,13 @@ function DashboardJobs() {
                     >
                       Optimize
                     </button>
+                    <button
+                      type="button"
+                      className="job-action-button job-action-button--danger"
+                      onClick={() => handleDeleteRequest(job)}
+                    >
+                      Delete
+                    </button>
                   </div>
                 </li>
               ))}
@@ -231,6 +265,25 @@ function DashboardJobs() {
           )}
         </article>
       </div>
+
+      {pendingDeleteJob ? (
+        <div className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="delete-job-title" aria-describedby="delete-job-description">
+          <div className="modal">
+            <h3 id="delete-job-title" className="modal-title">Delete job?</h3>
+            <p id="delete-job-description" className="modal-description">
+              "{getJobTitle(pendingDeleteJob)}" will be permanently removed. This action cannot be undone.
+            </p>
+            <div className="modal-actions">
+              <button type="button" className="modal-button modal-button--secondary" onClick={handleDeleteCancel}>
+                Keep job
+              </button>
+              <button type="button" className="modal-button modal-button--danger" onClick={handleDeleteConfirm}>
+                Delete job
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }
