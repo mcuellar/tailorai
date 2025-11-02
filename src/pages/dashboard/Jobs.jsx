@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { formatJobDescription } from '../../services/openai';
@@ -12,6 +12,10 @@ function DashboardJobs() {
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState(null);
   const [pendingDeleteJob, setPendingDeleteJob] = useState(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editingContent, setEditingContent] = useState('');
+  const [editingError, setEditingError] = useState(null);
+  const editingTextareaRef = useRef(null);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -101,6 +105,10 @@ function DashboardJobs() {
   };
 
   const handleSelectJob = jobId => {
+    if (isEditing) {
+      setIsEditing(false);
+      setEditingError(null);
+    }
     setSelectedJobId(jobId);
   };
 
@@ -128,7 +136,157 @@ function DashboardJobs() {
     });
 
     setPendingDeleteJob(null);
+    setIsEditing(false);
+    setEditingContent('');
+    setEditingError(null);
   };
+  
+  const startEditing = () => {
+    if (!selectedJob) {
+      return;
+    }
+    setIsEditing(true);
+    setEditingError(null);
+    setEditingContent(selectedJob.formatted || selectedJob.original || '');
+    requestAnimationFrame(() => {
+      editingTextareaRef.current?.focus();
+      editingTextareaRef.current?.setSelectionRange(0, 0);
+    });
+  };
+
+  const cancelEditing = () => {
+    setIsEditing(false);
+    setEditingError(null);
+    setEditingContent(selectedJob?.formatted || '');
+  };
+
+  const handleEditSave = () => {
+    if (!selectedJob) {
+      return;
+    }
+
+    const trimmed = editingContent.trim();
+    if (!trimmed) {
+      setEditingError('Provide Markdown content before saving.');
+      return;
+    }
+
+    setJobs(prev =>
+      prev.map(job =>
+        job.id === selectedJob.id
+          ? {
+              ...job,
+              formatted: trimmed,
+              updatedAt: new Date().toISOString(),
+            }
+          : job,
+      ),
+    );
+
+    setIsEditing(false);
+    setEditingError(null);
+  };
+
+  const applyMarkdownSnippet = action => {
+    const textarea = editingTextareaRef.current;
+    if (!textarea) {
+      return;
+    }
+
+    const { selectionStart, selectionEnd, value } = textarea;
+    const selectedText = value.slice(selectionStart, selectionEnd);
+    let updatedValue = value;
+    let cursorStart = selectionStart;
+    let cursorEnd = selectionEnd;
+
+    const wrapSelection = (before, after, placeholder = '') => {
+      const insert = selectedText || placeholder;
+      updatedValue = `${value.slice(0, selectionStart)}${before}${insert}${after}${value.slice(selectionEnd)}`;
+      cursorStart = selectionStart + before.length;
+      cursorEnd = cursorStart + insert.length;
+    };
+
+    switch (action) {
+      case 'bold':
+        wrapSelection('**', '**', 'bold text');
+        break;
+      case 'italic':
+        wrapSelection('_', '_', 'italic text');
+        break;
+      case 'heading': {
+        const lines = value.split('\n');
+        const startLineIndex = value.slice(0, selectionStart).split('\n').length - 1;
+        const line = lines[startLineIndex] ?? '';
+        const trimmedLine = line.replace(/^#+\s*/, '');
+        lines[startLineIndex] = `## ${trimmedLine || 'Heading'}`;
+        updatedValue = lines.join('\n');
+        cursorStart = value.indexOf(line);
+        cursorEnd = cursorStart + lines[startLineIndex].length;
+        break;
+      }
+      case 'bullet': {
+        const before = value.slice(0, selectionStart);
+        const selected = value.slice(selectionStart, selectionEnd) || 'List item';
+        const after = value.slice(selectionEnd);
+        const formatted = selected
+          .split('\n')
+          .map(line => (line.trim().startsWith('- ') ? line : `- ${line.trim()}`))
+          .join('\n');
+        updatedValue = `${before}${formatted}${after}`;
+        cursorStart = selectionStart;
+        cursorEnd = selectionStart + formatted.length;
+        break;
+      }
+      case 'numbered': {
+        const before = value.slice(0, selectionStart);
+        const selected = value.slice(selectionStart, selectionEnd) || 'First item\nSecond item';
+        const formatted = selected
+          .split('\n')
+          .map((line, index) => {
+            const trimmed = line.trim().replace(/^\d+\.\s*/, '');
+            return `${index + 1}. ${trimmed}`;
+          })
+          .join('\n');
+        updatedValue = `${before}${formatted}${value.slice(selectionEnd)}`;
+        cursorStart = selectionStart;
+        cursorEnd = selectionStart + formatted.length;
+        break;
+      }
+      case 'quote': {
+        const before = value.slice(0, selectionStart);
+        const selected = value.slice(selectionStart, selectionEnd) || 'Quoted text';
+        const formatted = selected
+          .split('\n')
+          .map(line => (line.trim().startsWith('>') ? line : `> ${line.trim()}`))
+          .join('\n');
+        updatedValue = `${before}${formatted}${value.slice(selectionEnd)}`;
+        cursorStart = selectionStart;
+        cursorEnd = selectionStart + formatted.length;
+        break;
+      }
+      default:
+        return;
+    }
+
+    setEditingContent(updatedValue);
+
+    requestAnimationFrame(() => {
+      textarea.focus();
+      textarea.setSelectionRange(cursorStart, cursorEnd);
+    });
+  };
+
+  useEffect(() => {
+    if (!selectedJob) {
+      setIsEditing(false);
+      setEditingContent('');
+      return;
+    }
+
+    if (!isEditing) {
+      setEditingContent(selectedJob.formatted || selectedJob.original || '');
+    }
+  }, [selectedJob, isEditing]);
 
   const getJobTitle = job => {
     const source = (job.formatted || job.original || '').toString();
@@ -157,8 +315,10 @@ function DashboardJobs() {
     <section className="dashboard-content jobs-layout">
       <article className="dashboard-card job-entry-card">
         <div className="card-header">
-          <h2>Add a Job</h2>
-          <span className="card-status">AI Markdown Formatting</span>
+          <div className="card-header-main">
+            <h2>Add a Job</h2>
+            <span className="card-status">AI Markdown Formatting</span>
+          </div>
         </div>
         <p>Paste a new job description below and TailorAI will polish it as Markdown once you save.</p>
 
@@ -191,8 +351,10 @@ function DashboardJobs() {
       <div className="jobs-grid">
         <article className="dashboard-card job-list-card">
           <div className="card-header">
-            <h2>Your Jobs</h2>
-            <span className="card-status">{jobs.length} saved</span>
+            <div className="card-header-main">
+              <h2>Your Jobs</h2>
+              <span className="card-status">{jobs.length} saved</span>
+            </div>
           </div>
 
           {jobs.length === 0 ? (
@@ -234,6 +396,7 @@ function DashboardJobs() {
                     >
                       Optimize
                     </button>
+                    {/* Edit button removed from job list; editing is now only available in the Preview pane */}
                     <button
                       type="button"
                       className="job-action-button job-action-button--danger"
@@ -250,14 +413,84 @@ function DashboardJobs() {
 
         <article className="dashboard-card job-preview-card">
           <div className="card-header">
-            <h2>Preview</h2>
-            <span className="card-status">Markdown</span>
+            <div className="card-header-main">
+              <h2>Preview</h2>
+              <span className="card-status">Markdown</span>
+            </div>
+            {selectedJob && !isEditing ? (
+              <button
+                type="button"
+                className="preview-edit-trigger"
+                onClick={startEditing}
+                title="Edit Markdown"
+              >
+                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none">
+                  <path
+                    d="M5 18.5 3.5 20 4 17l9.5-9.5 2 2L5 18.5Z"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                  <path
+                    d="m14.5 5.5 2-2 2 2-2 2-2-2Z"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </button>
+            ) : null}
           </div>
 
           {!selectedJob ? (
             <p className="job-preview-empty">
               Select a job to see the AI-formatted Markdown preview.
             </p>
+          ) : isEditing ? (
+            <div className="job-preview-editor">
+              <div className="markdown-toolbar" role="group" aria-label="Markdown formatting options">
+                <button type="button" onClick={() => applyMarkdownSnippet('bold')}>
+                  Bold
+                </button>
+                <button type="button" onClick={() => applyMarkdownSnippet('italic')}>
+                  Italic
+                </button>
+                <button type="button" onClick={() => applyMarkdownSnippet('heading')}>
+                  Heading
+                </button>
+                <button type="button" onClick={() => applyMarkdownSnippet('bullet')}>
+                  Bullet List
+                </button>
+                <button type="button" onClick={() => applyMarkdownSnippet('numbered')}>
+                  Numbered List
+                </button>
+                <button type="button" onClick={() => applyMarkdownSnippet('quote')}>
+                  Quote
+                </button>
+              </div>
+              <textarea
+                ref={editingTextareaRef}
+                className="job-preview-textarea"
+                value={editingContent}
+                onChange={event => setEditingContent(event.target.value)}
+                aria-label="Edit job Markdown"
+              />
+              {editingError ? (
+                <p className="job-preview-error" role="alert">
+                  {editingError}
+                </p>
+              ) : null}
+              <div className="job-preview-editor-actions">
+                <button type="button" className="editor-cancel" onClick={cancelEditing}>
+                  Cancel
+                </button>
+                <button type="button" className="editor-save" onClick={handleEditSave}>
+                  Save Changes
+                </button>
+              </div>
+            </div>
           ) : (
             <div className="job-preview-content">
               <ReactMarkdown remarkPlugins={[remarkGfm]}>{selectedJob.formatted}</ReactMarkdown>
@@ -284,6 +517,7 @@ function DashboardJobs() {
           </div>
         </div>
       ) : null}
+
     </section>
   );
 }
