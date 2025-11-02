@@ -108,7 +108,7 @@ function LandingPage() {
           </div>
           <div className="hero-visual">
             <div className="visual-card">
-              <div className="card-header">
+              <div className="visual-card-header">
                 <div className="card-dots">
                   <span></span>
                   <span></span>

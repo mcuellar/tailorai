@@ -221,7 +221,7 @@
   overflow: hidden;
 }
 
-.card-header {
+.visual-card-header {
   background: linear-gradient(135deg, #1f2333 0%, #3a556a 100%);
   padding: 1rem;
 }
