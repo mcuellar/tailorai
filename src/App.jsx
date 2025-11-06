@@ -3,6 +3,7 @@ import LandingPage from './pages/LandingPage';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import DashboardJobs from './pages/dashboard/Jobs';
+import DashboardResumes from './pages/dashboard/Resumes';
 import BillingPage from './pages/dashboard/Billing';
 import SettingsPage from './pages/dashboard/Settings';
 import './App.css';
@@ -20,6 +21,7 @@ function App() {
         <Route path="/login" element={<Register />} /> {/* Placeholder for login */}
         <Route path="/dashboard" element={<Dashboard />}>
           <Route index element={<DashboardJobs />} />
+          <Route path="resumes" element={<DashboardResumes />} />
           <Route path="billing" element={<BillingPage />} />
           <Route path="settings" element={<SettingsPage />} />
         </Route>

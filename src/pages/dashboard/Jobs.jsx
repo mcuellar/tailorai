@@ -1,11 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { formatJobDescription } from '../../services/openai';
+import { formatJobDescription, optimizeResume } from '../../services/openai';
 
 const STORAGE_KEY = 'tailorai_jobs_v1';
+const BASE_RESUME_KEY = 'tailorai_base_resume_v1';
+const RESUMES_STORAGE_KEY = 'tailorai_resumes_v1';
+const PREVIEW_MODES = {
+  JOB: 'job',
+  RESUME: 'resume',
+};
 
 function DashboardJobs() {
+  const navigate = useNavigate();
+  const location = useLocation();
   const [jobInput, setJobInput] = useState('');
   const [jobs, setJobs] = useState([]);
   const [selectedJobId, setSelectedJobId] = useState(null);
@@ -15,6 +24,14 @@ function DashboardJobs() {
   const [isEditing, setIsEditing] = useState(false);
   const [editingContent, setEditingContent] = useState('');
   const [editingError, setEditingError] = useState(null);
+  const [previewMode, setPreviewMode] = useState(PREVIEW_MODES.JOB);
+  const [isOptimizing, setIsOptimizing] = useState(false);
+  const [optimizeError, setOptimizeError] = useState(null);
+  const [optimizingJobTitle, setOptimizingJobTitle] = useState('');
+  const [baseResume, setBaseResume] = useState('');
+  const [baseResumeDraft, setBaseResumeDraft] = useState('');
+  const [baseResumeMessage, setBaseResumeMessage] = useState(null);
+  const baseResumeCardRef = useRef(null);
   const editingTextareaRef = useRef(null);
 
   useEffect(() => {
@@ -27,8 +44,19 @@ function DashboardJobs() {
       if (stored) {
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          setJobs(parsed);
-          setSelectedJobId(parsed[0].id);
+          const normalized = parsed
+            .filter(Boolean)
+            .map(job => ({
+              ...job,
+              original: job.original ?? '',
+              formatted: job.formatted ?? job.original ?? '',
+              optimizedResume: job.optimizedResume ?? '',
+            }));
+
+          if (normalized.length > 0) {
+            setJobs(normalized);
+            setSelectedJobId(normalized[0].id);
+          }
         }
       }
     } catch (storageError) {
@@ -49,13 +77,110 @@ function DashboardJobs() {
   }, [jobs]);
 
   useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const snapshot = {
+      baseResume,
+      jobs: jobs
+        .filter(job => job.optimizedResume)
+        .map(job => ({
+          jobId: job.id,
+          title: getJobTitle(job),
+          content: job.optimizedResume,
+          optimizedAt: job.resumeUpdatedAt ?? job.updatedAt ?? job.createdAt,
+        })),
+    };
+
+    try {
+      window.localStorage.setItem(RESUMES_STORAGE_KEY, JSON.stringify(snapshot));
+    } catch (storageError) {
+      console.warn('[TailorAI] Unable to persist resumes snapshot to localStorage.', storageError);
+    }
+  }, [jobs, baseResume]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    try {
+      const storedResumes = window.localStorage.getItem(RESUMES_STORAGE_KEY);
+      if (!storedResumes) {
+        return;
+      }
+
+      const parsed = JSON.parse(storedResumes);
+      if (parsed && typeof parsed === 'object') {
+        const resumeJobs = parsed.jobs || [];
+        if (Array.isArray(resumeJobs) && resumeJobs.length > 0) {
+          setJobs(prevJobs => {
+            const merged = [...prevJobs];
+
+            resumeJobs.forEach(resumeEntry => {
+              const index = merged.findIndex(job => job.id === resumeEntry.jobId);
+              if (index !== -1) {
+                merged[index] = {
+                  ...merged[index],
+                  optimizedResume: resumeEntry.content,
+                  resumeUpdatedAt: resumeEntry.optimizedAt,
+                };
+              }
+            });
+
+            return merged;
+          });
+        }
+
+        if (typeof parsed.baseResume === 'string' && parsed.baseResume.trim()) {
+          setBaseResume(parsed.baseResume);
+          setBaseResumeDraft(parsed.baseResume);
+        }
+      }
+    } catch (storageError) {
+      console.warn('[TailorAI] Unable to hydrate resume data from localStorage.', storageError);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    try {
+      const storedResume = window.localStorage.getItem(BASE_RESUME_KEY);
+      if (storedResume) {
+        setBaseResume(storedResume);
+        setBaseResumeDraft(storedResume);
+      }
+    } catch (storageError) {
+      console.warn('[TailorAI] Unable to hydrate base resume from localStorage.', storageError);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    try {
+      window.localStorage.setItem(BASE_RESUME_KEY, baseResume);
+    } catch (storageError) {
+      console.warn('[TailorAI] Unable to persist base resume to localStorage.', storageError);
+    }
+  }, [baseResume]);
+
+  useEffect(() => {
     if (!selectedJobId && jobs.length > 0) {
       setSelectedJobId(jobs[0].id);
+      setPreviewMode(PREVIEW_MODES.JOB);
       return;
     }
 
     if (selectedJobId && !jobs.some(job => job.id === selectedJobId)) {
       setSelectedJobId(jobs[0]?.id ?? null);
+      setPreviewMode(PREVIEW_MODES.JOB);
     }
   }, [jobs, selectedJobId]);
 
@@ -71,6 +196,12 @@ function DashboardJobs() {
   );
 
   const selectedJob = jobs.find(job => job.id === selectedJobId) || null;
+  const activePreviewContent = selectedJob
+    ? previewMode === PREVIEW_MODES.RESUME
+      ? selectedJob.optimizedResume || ''
+      : selectedJob.formatted || selectedJob.original || ''
+    : '';
+  const optimizingLabel = optimizingJobTitle || (selectedJob ? getJobTitle(selectedJob) : 'selected job');
 
   const handleSave = async event => {
     event.preventDefault();
@@ -104,13 +235,56 @@ function DashboardJobs() {
     }
   };
 
-  const handleSelectJob = jobId => {
+  const handleSelectJob = (jobId, mode = PREVIEW_MODES.JOB) => {
     if (isEditing) {
       setIsEditing(false);
       setEditingError(null);
     }
+    const targetJob = jobs.find(job => job.id === jobId);
+    if (mode === PREVIEW_MODES.RESUME && targetJob && !targetJob.optimizedResume) {
+      setOptimizeError('Optimize this job to generate a tailored resume.');
+      return;
+    }
+
+    setPreviewMode(mode);
+    setOptimizeError(null);
     setSelectedJobId(jobId);
   };
+
+  useEffect(() => {
+    if (!location.state || typeof location.state !== 'object') {
+      return;
+    }
+
+    const { jobId, previewMode: requestedMode } = location.state;
+    if (!jobId) {
+      navigate('/dashboard', { replace: true, state: null });
+      return;
+    }
+
+    const targetJob = jobs.find(job => job.id === jobId);
+    if (!targetJob) {
+      // Wait until jobs hydrate before clearing navigation state.
+      return;
+    }
+
+    const mode = requestedMode === PREVIEW_MODES.RESUME ? PREVIEW_MODES.RESUME : PREVIEW_MODES.JOB;
+
+    if (isEditing) {
+      setIsEditing(false);
+      setEditingError(null);
+    }
+
+    if (mode === PREVIEW_MODES.RESUME && !targetJob.optimizedResume) {
+      setOptimizeError('Optimize this job to generate a tailored resume.');
+    } else {
+      setOptimizeError(null);
+      setPreviewMode(mode);
+      setSelectedJobId(jobId);
+    }
+
+    navigate('/dashboard', { replace: true, state: null });
+  }, [location.state, jobs, isEditing, navigate]);
 
   const handleDeleteRequest = job => {
     setPendingDeleteJob(job);
@@ -140,14 +314,135 @@ function DashboardJobs() {
     setEditingContent('');
     setEditingError(null);
   };
+
+  const handleBaseResumeSave = () => {
+    const trimmed = baseResumeDraft.trim();
+
+    if (!trimmed) {
+      setBaseResumeMessage({ type: 'error', text: 'Add resume content before saving.' });
+      return;
+    }
+
+    setBaseResume(trimmed);
+    setBaseResumeDraft(trimmed);
+    setBaseResumeMessage({ type: 'success', text: 'Base resume saved.' });
+  setOptimizeError(null);
+
+    if (typeof window !== 'undefined') {
+      window.clearTimeout(handleBaseResumeSave.timeoutId);
+      handleBaseResumeSave.timeoutId = window.setTimeout(() => {
+        setBaseResumeMessage(null);
+      }, 2500);
+    }
+  };
+
+  const handleBaseResumeReset = () => {
+    setBaseResumeDraft(baseResume);
+    setBaseResumeMessage(null);
+    setOptimizeError(null);
+  };
+
+  const handleOptimizeResume = async job => {
+    if (!job) {
+      return;
+    }
+
+    if (isEditing) {
+      setIsEditing(false);
+      setEditingError(null);
+    }
+
+    const trimmedResume = baseResume.trim();
+    if (!trimmedResume) {
+      setOptimizeError('Add your base resume above before optimizing.');
+      baseResumeCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return;
+    }
+
+    const jobContent = (job.formatted || job.original || '').trim();
+    if (!jobContent) {
+      setOptimizeError('This job does not have content to optimize yet.');
+      return;
+    }
+
+    setPreviewMode(PREVIEW_MODES.RESUME);
+    setOptimizeError(null);
+    setOptimizingJobTitle(getJobTitle(job));
+    setIsOptimizing(true);
+
+    try {
+      const optimized = await optimizeResume({
+        baseResume: trimmedResume,
+        jobDescription: jobContent,
+        jobTitle: getJobTitle(job),
+      });
+
+      let updatedJobsSnapshot = [];
+      setJobs(prev => {
+        const next = prev.map(item =>
+          item.id === job.id
+            ? {
+                ...item,
+                optimizedResume: optimized,
+                resumeUpdatedAt: new Date().toISOString(),
+              }
+            : item,
+        );
+        updatedJobsSnapshot = next;
+        return next;
+      });
+
+      if (typeof window !== 'undefined' && updatedJobsSnapshot.length > 0) {
+        const snapshot = {
+          baseResume: trimmedResume,
+          jobs: updatedJobsSnapshot
+            .filter(item => item.optimizedResume)
+            .map(item => ({
+              jobId: item.id,
+              title: getJobTitle(item),
+              content: item.optimizedResume,
+              optimizedAt: item.resumeUpdatedAt ?? item.updatedAt ?? item.createdAt,
+            })),
+        };
+
+        try {
+          window.localStorage.setItem(RESUMES_STORAGE_KEY, JSON.stringify(snapshot));
+        } catch (snapshotError) {
+          console.warn('[TailorAI] Unable to persist optimized resume snapshot.', snapshotError);
+        }
+      }
+
+      setSelectedJobId(job.id);
+      setEditingContent(optimized);
+      navigate('/dashboard/resumes', { state: { highlightJobId: job.id } });
+    } catch (optimizationError) {
+      console.error('[TailorAI] Unable to optimize resume.', optimizationError);
+      setOptimizeError(optimizationError.message || 'Unable to optimize resume. Please try again.');
+    } finally {
+      setIsOptimizing(false);
+      setOptimizingJobTitle('');
+    }
+  };
   
   const startEditing = () => {
     if (!selectedJob) {
       return;
     }
+    if (previewMode === PREVIEW_MODES.RESUME && !selectedJob.optimizedResume) {
+      setOptimizeError('Optimize this job before editing the tailored resume.');
+      return;
+    }
+
     setIsEditing(true);
     setEditingError(null);
-    setEditingContent(selectedJob.formatted || selectedJob.original || '');
+
+    const source =
+      previewMode === PREVIEW_MODES.RESUME
+        ? selectedJob.optimizedResume || ''
+        : selectedJob.formatted || selectedJob.original || '';
+
+    setEditingContent(source);
+
     requestAnimationFrame(() => {
       editingTextareaRef.current?.focus();
       editingTextareaRef.current?.setSelectionRange(0, 0);
@@ -157,7 +452,7 @@ function DashboardJobs() {
   const cancelEditing = () => {
     setIsEditing(false);
     setEditingError(null);
-    setEditingContent(selectedJob?.formatted || '');
+    setEditingContent(activePreviewContent);
   };
 
   const handleEditSave = () => {
@@ -172,19 +467,30 @@ function DashboardJobs() {
     }
 
     setJobs(prev =>
-      prev.map(job =>
-        job.id === selectedJob.id
-          ? {
-              ...job,
-              formatted: trimmed,
-              updatedAt: new Date().toISOString(),
-            }
-          : job,
-      ),
+      prev.map(job => {
+        if (job.id !== selectedJob.id) {
+          return job;
+        }
+
+        if (previewMode === PREVIEW_MODES.RESUME) {
+          return {
+            ...job,
+            optimizedResume: trimmed,
+            resumeUpdatedAt: new Date().toISOString(),
+          };
+        }
+
+        return {
+          ...job,
+          formatted: trimmed,
+          updatedAt: new Date().toISOString(),
+        };
+      }),
     );
 
     setIsEditing(false);
     setEditingError(null);
+    setEditingContent(trimmed);
   };
 
   const applyMarkdownSnippet = action => {
@@ -284,11 +590,11 @@ function DashboardJobs() {
     }
 
     if (!isEditing) {
-      setEditingContent(selectedJob.formatted || selectedJob.original || '');
+      setEditingContent(activePreviewContent);
     }
-  }, [selectedJob, isEditing]);
+  }, [selectedJob, isEditing, activePreviewContent]);
 
-  const getJobTitle = job => {
+  function getJobTitle(job) {
     const source = (job.formatted || job.original || '').toString();
     const lines = source
       .split('\n')
@@ -300,16 +606,16 @@ function DashboardJobs() {
 
     const firstContentLine = lines.find(line => !line.startsWith('![')) ?? lines[0];
     return firstContentLine.replace(/^#+\s*/, '') || 'Untitled Job';
-  };
+  }
 
-  const getJobSnippet = job => {
+  function getJobSnippet(job) {
     const source = (job.formatted || job.original || '').toString();
     const plain = source.replace(/[#*_`>-]/g, '').replace(/\s+/g, ' ').trim();
     if (plain.length <= 120) {
       return plain;
     }
     return `${plain.slice(0, 117)}…`;
-  };
+  }
 
   return (
     <section className="dashboard-content jobs-layout">
@@ -348,6 +654,57 @@ function DashboardJobs() {
         </form>
       </article>
 
+      <article ref={baseResumeCardRef} className="dashboard-card base-resume-card">
+        <div className="card-header">
+          <div className="card-header-main">
+            <h2>Your Base Resume</h2>
+            <span className="card-status">
+              {baseResume ? 'Saved' : 'Required for Optimization'}
+            </span>
+          </div>
+        </div>
+        <p>
+          Save your base resume below. TailorAI will use it as the foundation when generating role-specific versions.
+        </p>
+        <textarea
+          className="base-resume-textarea"
+          placeholder="Paste your core resume here before tailoring it to each job."
+          value={baseResumeDraft}
+          onChange={event => setBaseResumeDraft(event.target.value)}
+          rows={10}
+        />
+        {baseResumeMessage ? (
+          <p
+            className={`resume-status resume-status--${baseResumeMessage.type}`}
+            role={baseResumeMessage.type === 'error' ? 'alert' : 'status'}
+          >
+            {baseResumeMessage.text}
+          </p>
+        ) : null}
+        <div className="base-resume-actions">
+          <button
+            type="button"
+            className="base-resume-button base-resume-button--ghost"
+            onClick={handleBaseResumeReset}
+            disabled={baseResumeDraft === baseResume}
+          >
+            Reset
+          </button>
+          <button
+            type="button"
+            className="base-resume-button"
+            onClick={handleBaseResumeSave}
+            disabled={baseResumeDraft.trim() === baseResume.trim()}
+          >
+            Save Base Resume
+          </button>
+        </div>
+      </article>
+
+      {optimizeError ? (
+        <p className="optimize-error" role="alert">{optimizeError}</p>
+      ) : null}
+
       <div className="jobs-grid">
         <article className="dashboard-card job-list-card">
           <div className="card-header">
@@ -383,20 +740,28 @@ function DashboardJobs() {
                   <div className="job-list-actions">
                     <button
                       type="button"
-                      className="job-action-button"
-                      onClick={() => handleSelectJob(job.id)}
+                      className="job-action-button job-action-button--ghost"
+                      onClick={() => handleSelectJob(job.id, PREVIEW_MODES.JOB)}
                     >
-                      View
+                      View JD
                     </button>
                     <button
                       type="button"
                       className="job-action-button job-action-button--ghost"
-                      title="Optimize coming soon"
-                      disabled
+                      onClick={() => handleSelectJob(job.id, PREVIEW_MODES.RESUME)}
+                      title={job.optimizedResume ? 'View tailored resume' : 'Optimize this job to view the tailored resume'}
+                      disabled={!job.optimizedResume}
+                    >
+                      View Resume
+                    </button>
+                    <button
+                      type="button"
+                      className="job-action-button"
+                      onClick={() => handleOptimizeResume(job)}
+                      disabled={isOptimizing}
                     >
                       Optimize
                     </button>
-                    {/* Edit button removed from job list; editing is now only available in the Preview pane */}
                     <button
                       type="button"
                       className="job-action-button job-action-button--danger"
@@ -415,7 +780,9 @@ function DashboardJobs() {
           <div className="card-header">
             <div className="card-header-main">
               <h2>Preview</h2>
-              <span className="card-status">Markdown</span>
+              <span className="card-status">
+                {previewMode === PREVIEW_MODES.RESUME ? 'Tailored Resume' : 'Markdown'}
+              </span>
             </div>
             {selectedJob && !isEditing ? (
               <button
@@ -446,7 +813,9 @@ function DashboardJobs() {
 
           {!selectedJob ? (
             <p className="job-preview-empty">
-              Select a job to see the AI-formatted Markdown preview.
+              {previewMode === PREVIEW_MODES.RESUME
+                ? 'Select a job to view its tailored resume.'
+                : 'Select a job to see the AI-formatted Markdown preview.'}
             </p>
           ) : isEditing ? (
             <div className="job-preview-editor">
@@ -475,7 +844,11 @@ function DashboardJobs() {
                 className="job-preview-textarea"
                 value={editingContent}
                 onChange={event => setEditingContent(event.target.value)}
-                aria-label="Edit job Markdown"
+                aria-label={
+                  previewMode === PREVIEW_MODES.RESUME
+                    ? 'Edit tailored resume Markdown'
+                    : 'Edit job Markdown'
+                }
               />
               {editingError ? (
                 <p className="job-preview-error" role="alert">
@@ -493,7 +866,21 @@ function DashboardJobs() {
             </div>
           ) : (
             <div className="job-preview-content">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{selectedJob.formatted}</ReactMarkdown>
+              {previewMode === PREVIEW_MODES.RESUME ? (
+                selectedJob.optimizedResume ? (
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    {selectedJob.optimizedResume}
+                  </ReactMarkdown>
+                ) : (
+                  <p className="job-preview-empty">
+                    Optimize this job to generate and view a tailored resume.
+                  </p>
+                )
+              ) : (
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  {selectedJob.formatted || selectedJob.original}
+                </ReactMarkdown>
+              )}
             </div>
           )}
         </article>
@@ -514,6 +901,18 @@ function DashboardJobs() {
                 Delete job
               </button>
             </div>
+          </div>
+        </div>
+      ) : null}
+
+      {isOptimizing ? (
+        <div className="modal-overlay" role="alertdialog" aria-modal="true" aria-live="assertive">
+          <div className="modal optimizing-modal">
+            <h3 className="modal-title">Optimizing… Please wait</h3>
+            <p className="modal-description">
+              Tailoring your resume for "{optimizingLabel}".
+            </p>
+            <div className="optimizing-spinner" aria-hidden="true" />
           </div>
         </div>
       ) : null}

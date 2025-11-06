@@ -1,0 +1,95 @@
+.resumes-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.resume-base-card {
+  gap: 1.25rem;
+}
+
+.resume-base-preview {
+  max-height: 420px;
+  overflow-y: auto;
+  padding-right: 0.5rem;
+}
+
+.resume-base-preview h1,
+.resume-base-preview h2,
+.resume-base-preview h3,
+.resume-base-preview h4 {
+  margin-top: 1.25rem;
+  margin-bottom: 0.75rem;
+}
+
+.resume-base-preview ul,
+.resume-base-preview ol {
+  padding-left: 1.25rem;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.resume-base-preview p {
+  margin: 0;
+  opacity: 1;
+}
+
+.resume-edit-base {
+  padding: 0.5rem 1.1rem;
+  border-radius: 999px;
+  border: 1px solid rgba(31, 35, 51, 0.18);
+  background: rgba(31, 35, 51, 0.05);
+  color: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.resume-edit-base:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(31, 35, 51, 0.18);
+}
+
+.dashboard--dark .resume-edit-base {
+  background: rgba(246, 242, 235, 0.08);
+  border-color: rgba(212, 175, 112, 0.28);
+}
+
+.resumes-grid {
+  align-items: stretch;
+}
+
+.resume-list-card,
+.resume-preview-card {
+  gap: 1.5rem;
+}
+
+.resume-empty {
+  opacity: 0.75;
+}
+
+.resume-preview-content {
+  max-height: 520px;
+  overflow-y: auto;
+  padding-right: 0.5rem;
+}
+
+.resume-preview-content h1,
+.resume-preview-content h2,
+.resume-preview-content h3,
+.resume-preview-content h4 {
+  margin-top: 1.25rem;
+  margin-bottom: 0.75rem;
+}
+
+.resume-preview-content ul,
+.resume-preview-content ol {
+  padding-left: 1.25rem;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.resume-preview-content p {
+  margin: 0;
+  opacity: 1;
+}

@@ -1,12 +1,6 @@
 const OPENAI_MODEL = 'gpt-4o-mini';
 const STORAGE_WARNING = 'Set VITE_OPENAI_API_KEY in your Vite environment to enable OpenAI formatting.';
 
-/**
- * Formats a raw job description into Markdown using OpenAI.
- * Falls back to a simple Markdown wrapper in development if no API key is provided.
- * @param {string} jobDescription
- * @returns {Promise<string>}
- */
 export async function formatJobDescription(jobDescription) {
   const trimmed = jobDescription?.trim();
 
@@ -24,7 +18,6 @@ export async function formatJobDescription(jobDescription) {
     console.warn('[TailorAI] Missing VITE_OPENAI_API_KEY. Falling back to local formatter for development.');
     return localMarkdownFallback(trimmed);
   }
-
 
   const body = {
     model: OPENAI_MODEL,
@@ -44,7 +37,7 @@ export async function formatJobDescription(jobDescription) {
   };
 
   const payloadSize = new TextEncoder().encode(JSON.stringify(body)).length;
-  logSize('Payload', payloadSize);
+  logSize('Job format payload', payloadSize);
 
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
@@ -55,19 +48,10 @@ export async function formatJobDescription(jobDescription) {
     body: JSON.stringify(body),
   });
 
-  // Clone the response to measure size without consuming the stream
   const responseClone = response.clone();
   const responseText = await responseClone.text();
   const responseSize = new TextEncoder().encode(responseText).length;
-  logSize('Response', responseSize);
-
-function logSize(label, bytes) {
-  const kb = bytes / 1024;
-  const mb = kb / 1024;
-  console.log(
-    `[OpenAI] ${label} size: ${bytes} bytes | ${kb.toFixed(2)} KB | ${mb.toFixed(4)} MB`
-  );
-}
+  logSize('Job format response', responseSize);
 
   if (!response.ok) {
     const errorPayload = await safeParseJSON(response);
@@ -85,6 +69,85 @@ function logSize(label, bytes) {
   return normalizeMarkdown(markdown);
 }
 
+export async function optimizeResume({ baseResume, jobDescription, jobTitle }) {
+  const resumeTrimmed = baseResume?.trim();
+  const jobTrimmed = jobDescription?.trim();
+
+  if (!resumeTrimmed) {
+    throw new Error('Add your base resume before optimizing.');
+  }
+
+  if (!jobTrimmed) {
+    throw new Error('Select a job description before optimizing a resume.');
+  }
+
+  const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
+
+  if (!apiKey) {
+    if (import.meta.env.PROD) {
+      throw new Error(STORAGE_WARNING);
+    }
+
+    console.warn('[TailorAI] Missing VITE_OPENAI_API_KEY. Returning development fallback resume.');
+    return localResumeFallback(resumeTrimmed, jobTrimmed, jobTitle);
+  }
+
+  const body = {
+    model: OPENAI_MODEL,
+    temperature: 0.45,
+    messages: [
+      {
+        role: 'system',
+        content:
+          'You are an expert career coach. Rewrite resumes so they align with a target job description. Keep achievements measurable, prioritize relevant experience, use concise bullet lists, and respond only with Markdown representing the tailored resume.',
+      },
+      {
+        role: 'user',
+        content: `Base resume:\n${resumeTrimmed}\n\nTarget job description:\n${jobTrimmed}\n\nRewrite the resume so it is tailored to this role. Emphasize the most relevant accomplishments, mirror the terminology of the job description when appropriate, and keep the tone professional. Use the target job title${jobTitle ? ` "${jobTitle}"` : ''} in the summary.`,
+      },
+    ],
+    max_tokens: 1100,
+  };
+
+  const payloadSize = new TextEncoder().encode(JSON.stringify(body)).length;
+  logSize('Resume optimize payload', payloadSize);
+
+  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify(body),
+  });
+
+  const responseClone = response.clone();
+  const responseText = await responseClone.text();
+  const responseSize = new TextEncoder().encode(responseText).length;
+  logSize('Resume optimize response', responseSize);
+
+  if (!response.ok) {
+    const errorPayload = await safeParseJSON(response);
+    const message = errorPayload?.error?.message || 'Unable to optimize resume with OpenAI.';
+    throw new Error(message);
+  }
+
+  const payload = await response.json();
+  const markdown = payload?.choices?.[0]?.message?.content;
+
+  if (!markdown) {
+    throw new Error('OpenAI response did not include resume content.');
+  }
+
+  return normalizeMarkdown(markdown);
+}
+
+function logSize(label, bytes) {
+  const kb = bytes / 1024;
+  const mb = kb / 1024;
+  console.log(`[OpenAI] ${label}: ${bytes} bytes | ${kb.toFixed(2)} KB | ${mb.toFixed(4)} MB`);
+}
+
 async function safeParseJSON(response) {
   try {
     return await response.json();
@@ -98,6 +161,11 @@ function localMarkdownFallback(raw) {
   const [firstLine = 'Job Description'] = normalized.split('\n').filter(Boolean);
 
   return `# ${firstLine.replace(/^[#\s]+/, '')}\n\n${normalized}`;
+}
+
+function localResumeFallback(baseResume, jobDescription, jobTitle) {
+  const heading = jobTitle ? `# ${jobTitle} Resume (Dev Fallback)` : '# Tailored Resume (Dev Fallback)';
+  return `${heading}\n\n> This resume was generated using the local development fallback.\n\n${baseResume}\n\n---\n\n## Target Role Notes\n\n${jobDescription}`;
 }
 
 function normalizeMarkdown(raw) {
