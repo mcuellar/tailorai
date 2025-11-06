@@ -550,6 +550,12 @@
   gap: 0.75rem;
 }
 
+.card-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 .card-header h2 {
   margin: 0;
   font-size: 1.5rem;
@@ -573,6 +579,77 @@
   margin: 0;
   opacity: 0.75;
   line-height: 1.6;
+}
+
+.collapse-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.95rem;
+  border-radius: 999px;
+  border: 1px solid rgba(31, 35, 51, 0.18);
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 4px 10px rgba(31, 35, 51, 0.12);
+  font-weight: 600;
+  color: inherit;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.collapse-toggle svg {
+  width: 18px;
+  height: 18px;
+}
+
+.collapse-toggle:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+  transform: none;
+  box-shadow: none;
+}
+
+.collapse-toggle:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px rgba(31, 35, 51, 0.18);
+}
+
+.collapse-toggle:disabled:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+.dashboard--dark .collapse-toggle {
+  background: rgba(19, 23, 34, 0.88);
+  border-color: rgba(212, 175, 112, 0.28);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.45);
+}
+
+.dashboard--dark .collapse-toggle:hover {
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.55);
+}
+
+.collapse-toggle.is-collapsed {
+  opacity: 0.85;
+}
+
+.base-resume-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.base-resume-panel.is-collapsed {
+  gap: 0.75rem;
+}
+
+.base-resume-collapsed-message {
+  margin: 0;
+  opacity: 0.7;
+}
+
+.base-resume-lede {
+  margin: 0;
+  opacity: 0.75;
 }
 
 .jobs-layout {
@@ -760,6 +837,33 @@
 
 .dashboard--dark .job-search-clear:hover {
   background: rgba(246, 242, 235, 0.28);
+}
+
+.markdown-tips-button {
+  padding: 0.45rem 1.1rem;
+  border-radius: 999px;
+  border: 1px solid rgba(31, 35, 51, 0.18);
+  background: rgba(255, 255, 255, 0.92);
+  color: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+  box-shadow: 0 4px 10px rgba(31, 35, 51, 0.12);
+}
+
+.markdown-tips-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px rgba(31, 35, 51, 0.18);
+}
+
+.dashboard--dark .markdown-tips-button {
+  background: rgba(19, 23, 34, 0.88);
+  border-color: rgba(212, 175, 112, 0.28);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.45);
+}
+
+.dashboard--dark .markdown-tips-button:hover {
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.55);
 }
 
 .job-list {
@@ -1111,6 +1215,84 @@
   gap: 0.75rem;
   flex-wrap: wrap;
   margin-top: 0.5rem;
+}
+
+.markdown-tips-modal {
+  max-width: 720px;
+  gap: 1.25rem;
+}
+
+.markdown-tips-list {
+  margin: 0;
+  padding-left: 1rem;
+  display: grid;
+  gap: 0.5rem;
+  font-size: 0.95rem;
+}
+
+.markdown-tips-list li {
+  line-height: 1.5;
+}
+
+.markdown-tips-list code {
+  background: rgba(31, 35, 51, 0.08);
+  padding: 0.1rem 0.35rem;
+  border-radius: 0.35rem;
+  font-size: 0.9rem;
+}
+
+.dashboard--dark .markdown-tips-list code {
+  background: rgba(246, 242, 235, 0.08);
+}
+
+.markdown-tips-example {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.markdown-tips-code pre {
+  margin: 0;
+  padding: 1rem;
+  border-radius: 0.75rem;
+  background: rgba(31, 35, 51, 0.08);
+  border: 1px solid rgba(31, 35, 51, 0.14);
+  overflow-x: auto;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.markdown-tips-preview-content {
+  border-radius: 0.75rem;
+  border: 1px solid rgba(31, 35, 51, 0.14);
+  padding: 1rem 1.25rem;
+  background: rgba(255, 255, 255, 0.92);
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.markdown-tips-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.65;
+  display: inline-block;
+  margin-bottom: 0.5rem;
+}
+
+.dashboard--dark .markdown-tips-code pre {
+  background: rgba(19, 23, 34, 0.85);
+  border-color: rgba(212, 175, 112, 0.22);
+}
+
+.dashboard--dark .markdown-tips-preview-content {
+  background: rgba(19, 23, 34, 0.9);
+  border-color: rgba(212, 175, 112, 0.22);
+}
+
+.markdown-tips-actions {
+  justify-content: flex-end;
 }
 
 .optimizing-modal {

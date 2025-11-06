@@ -18,6 +18,18 @@ function sortJobsByCreated(entries = []) {
     .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
 }
 
+const MARKDOWN_TIPS_SNIPPET = `# Summary
+- Start with a strong achievement or core value
+- Mention the years of experience that match the role
+
+## Experience
+**Senior Product Manager — Acme Corp** _(2022 – Present)_
+- Ship outcomes using verbs + metrics ("Increased NPS by 14%")
+- Mirror keywords from the job description naturally
+
+## Skills
+- Group skills with commas (Design Strategy, Roadmapping, A/B Testing)`;
+
 function DashboardJobs() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -39,6 +51,8 @@ function DashboardJobs() {
   const [baseResumeDraft, setBaseResumeDraft] = useState('');
   const [baseResumeMessage, setBaseResumeMessage] = useState(null);
   const [isBaseResumeEditing, setIsBaseResumeEditing] = useState(false);
+  const [isBaseResumeCollapsed, setIsBaseResumeCollapsed] = useState(false);
+  const [isMarkdownTipsOpen, setIsMarkdownTipsOpen] = useState(false);
   const baseResumeCardRef = useRef(null);
   const baseResumeEditorRef = useRef(null);
   const editingTextareaRef = useRef(null);
@@ -194,6 +208,23 @@ function DashboardJobs() {
     }
   }, [jobs, selectedJobId]);
 
+  useEffect(() => {
+    if (!isMarkdownTipsOpen) {
+      return;
+    }
+
+    const handleKeyDown = event => {
+      if (event.key === 'Escape') {
+        setIsMarkdownTipsOpen(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isMarkdownTipsOpen]);
+
   const dateFormatter = useMemo(
     () =>
       typeof Intl !== 'undefined'
@@ -348,6 +379,7 @@ function DashboardJobs() {
   };
 
   const startBaseResumeEditing = () => {
+    setIsBaseResumeCollapsed(false);
     setIsBaseResumeEditing(true);
     setBaseResumeDraft(baseResume);
     setBaseResumeMessage(null);
@@ -391,6 +423,26 @@ function DashboardJobs() {
     setBaseResumeDraft(baseResume);
     setBaseResumeMessage(null);
     setOptimizeError(null);
+  };
+
+  const toggleBaseResumeCollapsed = () => {
+    if (isBaseResumeCollapsed) {
+      setIsBaseResumeCollapsed(false);
+      return;
+    }
+
+    setIsBaseResumeEditing(false);
+    setBaseResumeDraft(baseResume);
+    setBaseResumeMessage(null);
+    setIsBaseResumeCollapsed(true);
+  };
+
+  const openMarkdownTips = () => {
+    setIsMarkdownTipsOpen(true);
+  };
+
+  const closeMarkdownTips = () => {
+    setIsMarkdownTipsOpen(false);
   };
 
   const applyBaseResumeMarkdown = action => {
@@ -810,109 +862,148 @@ function DashboardJobs() {
               {baseResume ? 'Saved' : 'Required for Optimization'}
             </span>
           </div>
-          {baseResume && !isBaseResumeEditing ? (
+          <div className="card-header-actions">
+            {baseResume && !isBaseResumeEditing && !isBaseResumeCollapsed ? (
+              <button
+                type="button"
+                className="preview-edit-trigger"
+                onClick={startBaseResumeEditing}
+                title="Edit base resume"
+              >
+                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none">
+                  <path
+                    d="M5 18.5 3.5 20 4 17l9.5-9.5 2 2L5 18.5Z"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                  <path
+                    d="m14.5 5.5 2-2 2 2-2 2-2-2Z"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </button>
+            ) : null}
             <button
               type="button"
-              className="preview-edit-trigger"
-              onClick={startBaseResumeEditing}
-              title="Edit base resume"
+              className={`collapse-toggle${isBaseResumeCollapsed ? ' is-collapsed' : ''}`}
+              onClick={toggleBaseResumeCollapsed}
+              aria-expanded={!isBaseResumeCollapsed}
+              aria-controls="base-resume-panel"
+              disabled={isBaseResumeEditing}
             >
-              <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none">
+              <span>{isBaseResumeCollapsed ? 'Expand' : 'Collapse'}</span>
+              <svg
+                viewBox="0 0 24 24"
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                aria-hidden="true"
+              >
                 <path
-                  d="M5 18.5 3.5 20 4 17l9.5-9.5 2 2L5 18.5Z"
-                  stroke="currentColor"
-                  strokeWidth="1.6"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-                <path
-                  d="m14.5 5.5 2-2 2 2-2 2-2-2Z"
-                  stroke="currentColor"
-                  strokeWidth="1.6"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
+                  d={isBaseResumeCollapsed ? 'M12 9l6 6H6l6-6Z' : 'M12 15l-6-6h12l-6 6Z'}
+                  fill="currentColor"
                 />
               </svg>
             </button>
+          </div>
+        </div>
+
+        <div
+          id="base-resume-panel"
+          className={`base-resume-panel${isBaseResumeCollapsed ? ' is-collapsed' : ''}`}
+        >
+          {isBaseResumeCollapsed ? (
+            <p className="base-resume-collapsed-message">
+              Base resume hidden. Expand to review, edit, or add details before optimizing.
+            </p>
+          ) : isBaseResumeEditing ? (
+            <div className="job-preview-editor base-resume-editor">
+              <p className="base-resume-lede">
+                TailorAI uses your base resume as the starting point for every tailored version.
+              </p>
+              <div className="markdown-toolbar" role="group" aria-label="Markdown formatting options">
+                <button type="button" onClick={() => applyBaseResumeMarkdown('bold')}>
+                  Bold
+                </button>
+                <button type="button" onClick={() => applyBaseResumeMarkdown('italic')}>
+                  Italic
+                </button>
+                <button type="button" onClick={() => applyBaseResumeMarkdown('heading')}>
+                  Heading
+                </button>
+                <button type="button" onClick={() => applyBaseResumeMarkdown('bullet')}>
+                  Bullet List
+                </button>
+                <button type="button" onClick={() => applyBaseResumeMarkdown('numbered')}>
+                  Numbered List
+                </button>
+                <button type="button" onClick={() => applyBaseResumeMarkdown('quote')}>
+                  Quote
+                </button>
+              </div>
+              <textarea
+                ref={baseResumeEditorRef}
+                className="base-resume-textarea"
+                placeholder="Paste your core resume here before tailoring it to each job."
+                value={baseResumeDraft}
+                onChange={event => setBaseResumeDraft(event.target.value)}
+                rows={12}
+              />
+              <div className="job-preview-editor-actions base-resume-editor-actions">
+                <button type="button" className="editor-cancel" onClick={cancelBaseResumeEditing}>
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="editor-cancel"
+                  onClick={handleBaseResumeReset}
+                  disabled={baseResumeDraft === baseResume}
+                >
+                  Reset
+                </button>
+                <button
+                  type="button"
+                  className="editor-save"
+                  onClick={handleBaseResumeSave}
+                  disabled={baseResumeDraft.trim() === baseResume.trim()}
+                >
+                  Save Base Resume
+                </button>
+              </div>
+            </div>
+          ) : baseResume ? (
+            <>
+              <p className="base-resume-lede">
+                TailorAI uses your base resume as the starting point for every tailored version.
+              </p>
+              <div className="job-preview-content base-resume-preview">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{baseResume}</ReactMarkdown>
+              </div>
+            </>
+          ) : (
+            <div className="base-resume-empty">
+              <p>
+                Save your base resume to give TailorAI the right context before optimizing a job.
+              </p>
+              <button type="button" className="base-resume-button" onClick={startBaseResumeEditing}>
+                Add Base Resume
+              </button>
+            </div>
+          )}
+
+          {!isBaseResumeCollapsed && baseResumeMessage ? (
+            <p
+              className={`resume-status resume-status--${baseResumeMessage.type}`}
+              role={baseResumeMessage.type === 'error' ? 'alert' : 'status'}
+            >
+              {baseResumeMessage.text}
+            </p>
           ) : null}
         </div>
-        <p>TailorAI uses your base resume as the starting point for every tailored version.</p>
-
-        {isBaseResumeEditing ? (
-          <div className="job-preview-editor base-resume-editor">
-            <div className="markdown-toolbar" role="group" aria-label="Markdown formatting options">
-              <button type="button" onClick={() => applyBaseResumeMarkdown('bold')}>
-                Bold
-              </button>
-              <button type="button" onClick={() => applyBaseResumeMarkdown('italic')}>
-                Italic
-              </button>
-              <button type="button" onClick={() => applyBaseResumeMarkdown('heading')}>
-                Heading
-              </button>
-              <button type="button" onClick={() => applyBaseResumeMarkdown('bullet')}>
-                Bullet List
-              </button>
-              <button type="button" onClick={() => applyBaseResumeMarkdown('numbered')}>
-                Numbered List
-              </button>
-              <button type="button" onClick={() => applyBaseResumeMarkdown('quote')}>
-                Quote
-              </button>
-            </div>
-            <textarea
-              ref={baseResumeEditorRef}
-              className="base-resume-textarea"
-              placeholder="Paste your core resume here before tailoring it to each job."
-              value={baseResumeDraft}
-              onChange={event => setBaseResumeDraft(event.target.value)}
-              rows={12}
-            />
-            <div className="job-preview-editor-actions base-resume-editor-actions">
-              <button type="button" className="editor-cancel" onClick={cancelBaseResumeEditing}>
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="editor-cancel"
-                onClick={handleBaseResumeReset}
-                disabled={baseResumeDraft === baseResume}
-              >
-                Reset
-              </button>
-              <button
-                type="button"
-                className="editor-save"
-                onClick={handleBaseResumeSave}
-                disabled={baseResumeDraft.trim() === baseResume.trim()}
-              >
-                Save Base Resume
-              </button>
-            </div>
-          </div>
-        ) : baseResume ? (
-          <div className="job-preview-content base-resume-preview">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{baseResume}</ReactMarkdown>
-          </div>
-        ) : (
-          <div className="base-resume-empty">
-            <p>
-              Save your base resume to give TailorAI the right context before optimizing a job.
-            </p>
-            <button type="button" className="base-resume-button" onClick={startBaseResumeEditing}>
-              Add Base Resume
-            </button>
-          </div>
-        )}
-
-        {baseResumeMessage ? (
-          <p
-            className={`resume-status resume-status--${baseResumeMessage.type}`}
-            role={baseResumeMessage.type === 'error' ? 'alert' : 'status'}
-          >
-            {baseResumeMessage.text}
-          </p>
-        ) : null}
       </article>
 
       {optimizeError ? (
@@ -1045,31 +1136,40 @@ function DashboardJobs() {
                 {previewMode === PREVIEW_MODES.RESUME ? 'Tailored Resume' : 'Markdown'}
               </span>
             </div>
-            {selectedJob && !isEditing ? (
+            <div className="card-header-actions">
               <button
                 type="button"
-                className="preview-edit-trigger"
-                onClick={startEditing}
-                title="Edit Markdown"
+                className="markdown-tips-button"
+                onClick={openMarkdownTips}
               >
-                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none">
-                  <path
-                    d="M5 18.5 3.5 20 4 17l9.5-9.5 2 2L5 18.5Z"
-                    stroke="currentColor"
-                    strokeWidth="1.6"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                  <path
-                    d="m14.5 5.5 2-2 2 2-2 2-2-2Z"
-                    stroke="currentColor"
-                    strokeWidth="1.6"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
+                Markdown Tips
               </button>
-            ) : null}
+              {selectedJob && !isEditing ? (
+                <button
+                  type="button"
+                  className="preview-edit-trigger"
+                  onClick={startEditing}
+                  title="Edit Markdown"
+                >
+                  <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none">
+                    <path
+                      d="M5 18.5 3.5 20 4 17l9.5-9.5 2 2L5 18.5Z"
+                      stroke="currentColor"
+                      strokeWidth="1.6"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                    <path
+                      d="m14.5 5.5 2-2 2 2-2 2-2-2Z"
+                      stroke="currentColor"
+                      strokeWidth="1.6"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </button>
+              ) : null}
+            </div>
           </div>
 
           {!selectedJob ? (
@@ -1146,6 +1246,54 @@ function DashboardJobs() {
           )}
         </article>
       </div>
+
+      {isMarkdownTipsOpen ? (
+        <div
+          className="modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="markdown-tips-title"
+          onClick={closeMarkdownTips}
+        >
+          <div
+            className="modal markdown-tips-modal"
+            onClick={event => event.stopPropagation()}
+          >
+            <h3 id="markdown-tips-title" className="modal-title">Markdown Tips</h3>
+            <p className="modal-description">
+              Use these quick pointers to format your job notes and tailored resumes with clarity.
+            </p>
+            <ul className="markdown-tips-list">
+              <li><strong>Headings:</strong> Start sections with <code>#</code>, <code>##</code>, or <code>###</code>.</li>
+              <li><strong>Bullet items:</strong> Use <code>-</code> or <code>*</code> followed by a space for concise achievements.</li>
+              <li><strong>Bold keywords:</strong> Wrap important phrases with <code>**double asterisks**</code>.</li>
+              <li><strong>Emphasis:</strong> Use <code>_single underscores_</code> to call out timeframe or context.</li>
+              <li><strong>Line breaks:</strong> Leave a blank line between paragraphs and section headings.</li>
+            </ul>
+            <div className="markdown-tips-example">
+              <div className="markdown-tips-code">
+                <span className="markdown-tips-label">Example Markdown</span>
+                <pre>{MARKDOWN_TIPS_SNIPPET}</pre>
+              </div>
+              <div className="markdown-tips-preview">
+                <span className="markdown-tips-label">Renders As</span>
+                <div className="markdown-tips-preview-content">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{MARKDOWN_TIPS_SNIPPET}</ReactMarkdown>
+                </div>
+              </div>
+            </div>
+            <div className="modal-actions markdown-tips-actions">
+              <button
+                type="button"
+                className="modal-button modal-button--primary"
+                onClick={closeMarkdownTips}
+              >
+                Got it
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {pendingDeleteJob ? (
         <div className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="delete-job-title" aria-describedby="delete-job-description">
