@@ -99,11 +99,11 @@ export async function optimizeResume({ baseResume, jobDescription, jobTitle }) {
       {
         role: 'system',
         content:
-          'You are an expert career coach. Rewrite resumes so they align with a target job description. Keep achievements measurable, prioritize relevant experience, use concise bullet lists, and respond only with Markdown representing the tailored resume.',
+          'You are an expert career coach and meticulous fact-checker. Rewrite resumes so they align with a target job description using only information that already exists in the provided base resume. Do not fabricate or infer new employers, titles, dates, technologies, certifications, responsibilities, or metrics. You may reorder, merge, or rephrase existing content, but every factual statement must be traceable to the base resume. If the base resume lacks details for a requirement, leave it out rather than inventing it. Respond only with Markdown representing the tailored resume.',
       },
       {
         role: 'user',
-        content: `Base resume:\n${resumeTrimmed}\n\nTarget job description:\n${jobTrimmed}\n\nRewrite the resume so it is tailored to this role. Emphasize the most relevant accomplishments, mirror the terminology of the job description when appropriate, and keep the tone professional. Use the target job title${jobTitle ? ` "${jobTitle}"` : ''} in the summary.`,
+        content: `Base resume (source of truth, do not introduce new facts):\n${resumeTrimmed}\n\nTarget job description:\n${jobTrimmed}\n\nRewrite the resume so it is tailored to this role. Rephrase and reprioritize existing achievements to match the role, mirror the terminology of the job description when appropriate, and keep the tone professional. Use the target job title${jobTitle ? ` "${jobTitle}"` : ''} in the summary. If a detail is not present in the base resume, leave it out instead of inventing it.`,
       },
     ],
     max_tokens: 1100,

@@ -1,11 +1,5 @@
 .resumes-layout {
-  display: flex;
-  flex-direction: column;
   gap: 2rem;
-}
-
-.resume-base-card {
-  gap: 1.25rem;
 }
 
 .resume-base-preview {
@@ -34,27 +28,6 @@
   opacity: 1;
 }
 
-.resume-edit-base {
-  padding: 0.5rem 1.1rem;
-  border-radius: 999px;
-  border: 1px solid rgba(31, 35, 51, 0.18);
-  background: rgba(31, 35, 51, 0.05);
-  color: inherit;
-  font-weight: 600;
-  cursor: pointer;
-  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
-}
-
-.resume-edit-base:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 6px 16px rgba(31, 35, 51, 0.18);
-}
-
-.dashboard--dark .resume-edit-base {
-  background: rgba(246, 242, 235, 0.08);
-  border-color: rgba(212, 175, 112, 0.28);
-}
-
 .resumes-grid {
   align-items: stretch;
 }
@@ -69,9 +42,7 @@
 }
 
 .resume-preview-content {
-  max-height: 520px;
-  overflow-y: auto;
-  padding-right: 0.5rem;
+  word-break: break-word;
 }
 
 .resume-preview-content h1,

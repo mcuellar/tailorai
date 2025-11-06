@@ -12,11 +12,18 @@ const PREVIEW_MODES = {
   RESUME: 'resume',
 };
 
+function sortJobsByCreated(entries = []) {
+  return entries
+    .slice()
+    .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+}
+
 function DashboardJobs() {
   const navigate = useNavigate();
   const location = useLocation();
   const [jobInput, setJobInput] = useState('');
   const [jobs, setJobs] = useState([]);
+  const [jobSearchTerm, setJobSearchTerm] = useState('');
   const [selectedJobId, setSelectedJobId] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -31,7 +38,9 @@ function DashboardJobs() {
   const [baseResume, setBaseResume] = useState('');
   const [baseResumeDraft, setBaseResumeDraft] = useState('');
   const [baseResumeMessage, setBaseResumeMessage] = useState(null);
+  const [isBaseResumeEditing, setIsBaseResumeEditing] = useState(false);
   const baseResumeCardRef = useRef(null);
+  const baseResumeEditorRef = useRef(null);
   const editingTextareaRef = useRef(null);
 
   useEffect(() => {
@@ -54,8 +63,9 @@ function DashboardJobs() {
             }));
 
           if (normalized.length > 0) {
-            setJobs(normalized);
-            setSelectedJobId(normalized[0].id);
+            const ordered = sortJobsByCreated(normalized);
+            setJobs(ordered);
+            setSelectedJobId(ordered[0].id);
           }
         }
       }
@@ -129,7 +139,7 @@ function DashboardJobs() {
               }
             });
 
-            return merged;
+            return sortJobsByCreated(merged);
           });
         }
 
@@ -195,6 +205,28 @@ function DashboardJobs() {
     [],
   );
 
+  const filteredJobs = useMemo(() => {
+    const term = jobSearchTerm.trim().toLowerCase();
+    if (!term) {
+      return jobs;
+    }
+
+    return jobs.filter(job => {
+      const titleText = getJobTitle(job).toLowerCase();
+      const jobText = `${job.formatted || ''} ${job.original || ''}`.toLowerCase();
+      const resumeText = (job.optimizedResume || '').toLowerCase();
+      return (
+        titleText.includes(term) ||
+        jobText.includes(term) ||
+        resumeText.includes(term)
+      );
+    });
+  }, [jobs, jobSearchTerm]);
+
+  const jobStatusLabel = jobSearchTerm.trim()
+    ? `${filteredJobs.length} match${filteredJobs.length === 1 ? '' : 'es'}`
+    : `${jobs.length} saved`;
+
   const selectedJob = jobs.find(job => job.id === selectedJobId) || null;
   const activePreviewContent = selectedJob
     ? previewMode === PREVIEW_MODES.RESUME
@@ -224,7 +256,7 @@ function DashboardJobs() {
         createdAt: new Date().toISOString(),
       };
 
-      setJobs(prev => [job, ...prev]);
+  setJobs(prev => sortJobsByCreated([job, ...prev]));
       setSelectedJobId(job.id);
       setJobInput('');
     } catch (formatError) {
@@ -302,7 +334,7 @@ function DashboardJobs() {
     const jobId = pendingDeleteJob.id;
 
     setJobs(prev => {
-      const updated = prev.filter(item => item.id !== jobId);
+      const updated = sortJobsByCreated(prev.filter(item => item.id !== jobId));
       if (selectedJobId === jobId) {
         setSelectedJobId(updated[0]?.id ?? null);
       }
@@ -313,6 +345,24 @@ function DashboardJobs() {
     setIsEditing(false);
     setEditingContent('');
     setEditingError(null);
+  };
+
+  const startBaseResumeEditing = () => {
+    setIsBaseResumeEditing(true);
+    setBaseResumeDraft(baseResume);
+    setBaseResumeMessage(null);
+    setOptimizeError(null);
+    setTimeout(() => {
+      baseResumeEditorRef.current?.focus();
+      baseResumeEditorRef.current?.setSelectionRange(0, 0);
+    }, 0);
+  };
+
+  const cancelBaseResumeEditing = () => {
+    setIsBaseResumeEditing(false);
+    setBaseResumeDraft(baseResume);
+    setBaseResumeMessage(null);
+    setOptimizeError(null);
   };
 
   const handleBaseResumeSave = () => {
@@ -326,6 +376,7 @@ function DashboardJobs() {
     setBaseResume(trimmed);
     setBaseResumeDraft(trimmed);
     setBaseResumeMessage({ type: 'success', text: 'Base resume saved.' });
+    setIsBaseResumeEditing(false);
   setOptimizeError(null);
 
     if (typeof window !== 'undefined') {
@@ -342,6 +393,94 @@ function DashboardJobs() {
     setOptimizeError(null);
   };
 
+  const applyBaseResumeMarkdown = action => {
+    const textarea = baseResumeEditorRef.current;
+    if (!textarea) {
+      return;
+    }
+
+    const { selectionStart, selectionEnd, value } = textarea;
+    const selectedText = value.slice(selectionStart, selectionEnd);
+    let updatedValue = value;
+    let cursorStart = selectionStart;
+    let cursorEnd = selectionEnd;
+
+    const wrapSelection = (before, after, placeholder = '') => {
+      const insert = selectedText || placeholder;
+      updatedValue = `${value.slice(0, selectionStart)}${before}${insert}${after}${value.slice(selectionEnd)}`;
+      cursorStart = selectionStart + before.length;
+      cursorEnd = cursorStart + insert.length;
+    };
+
+    switch (action) {
+      case 'bold':
+        wrapSelection('**', '**', 'bold text');
+        break;
+      case 'italic':
+        wrapSelection('_', '_', 'italic text');
+        break;
+      case 'heading': {
+        const lines = value.split('\n');
+        const startLineIndex = value.slice(0, selectionStart).split('\n').length - 1;
+        const line = lines[startLineIndex] ?? '';
+        const trimmedLine = line.replace(/^#+\s*/, '');
+        lines[startLineIndex] = `## ${trimmedLine || 'Heading'}`;
+        updatedValue = lines.join('\n');
+        cursorStart = value.indexOf(line);
+        cursorEnd = cursorStart + lines[startLineIndex].length;
+        break;
+      }
+      case 'bullet': {
+        const before = value.slice(0, selectionStart);
+        const selected = value.slice(selectionStart, selectionEnd) || 'List item';
+        const after = value.slice(selectionEnd);
+        const formatted = selected
+          .split('\n')
+          .map(line => (line.trim().startsWith('- ') ? line : `- ${line.trim()}`))
+          .join('\n');
+        updatedValue = `${before}${formatted}${after}`;
+        cursorStart = selectionStart;
+        cursorEnd = selectionStart + formatted.length;
+        break;
+      }
+      case 'numbered': {
+        const before = value.slice(0, selectionStart);
+        const selected = value.slice(selectionStart, selectionEnd) || 'First item\nSecond item';
+        const formatted = selected
+          .split('\n')
+          .map((line, index) => {
+            const trimmed = line.trim().replace(/^\d+\.\s*/, '');
+            return `${index + 1}. ${trimmed}`;
+          })
+          .join('\n');
+        updatedValue = `${before}${formatted}${value.slice(selectionEnd)}`;
+        cursorStart = selectionStart;
+        cursorEnd = selectionStart + formatted.length;
+        break;
+      }
+      case 'quote': {
+        const before = value.slice(0, selectionStart);
+        const selected = value.slice(selectionStart, selectionEnd) || 'Quoted text';
+        const formatted = selected
+          .split('\n')
+          .map(line => (line.trim().startsWith('>') ? line : `> ${line.trim()}`))
+          .join('\n');
+        updatedValue = `${before}${formatted}${value.slice(selectionEnd)}`;
+        cursorStart = selectionStart;
+        cursorEnd = selectionStart + formatted.length;
+        break;
+      }
+      default:
+        return;
+    }
+
+    setBaseResumeDraft(updatedValue);
+    setTimeout(() => {
+      textarea.focus();
+      textarea.setSelectionRange(cursorStart, cursorEnd);
+    }, 0);
+  };
+
   const handleOptimizeResume = async job => {
     if (!job) {
       return;
@@ -350,6 +489,11 @@ function DashboardJobs() {
     if (isEditing) {
       setIsEditing(false);
       setEditingError(null);
+    }
+
+    if (isBaseResumeEditing) {
+      setIsBaseResumeEditing(false);
+      setBaseResumeDraft(baseResume);
     }
 
     const trimmedResume = baseResume.trim();
@@ -379,14 +523,16 @@ function DashboardJobs() {
 
       let updatedJobsSnapshot = [];
       setJobs(prev => {
-        const next = prev.map(item =>
+        const next = sortJobsByCreated(
+          prev.map(item =>
           item.id === job.id
             ? {
                 ...item,
                 optimizedResume: optimized,
                 resumeUpdatedAt: new Date().toISOString(),
               }
-            : item,
+              : item,
+          ),
         );
         updatedJobsSnapshot = next;
         return next;
@@ -467,7 +613,8 @@ function DashboardJobs() {
     }
 
     setJobs(prev =>
-      prev.map(job => {
+      sortJobsByCreated(
+        prev.map(job => {
         if (job.id !== selectedJob.id) {
           return job;
         }
@@ -485,7 +632,8 @@ function DashboardJobs() {
           formatted: trimmed,
           updatedAt: new Date().toISOString(),
         };
-      }),
+        }),
+      ),
     );
 
     setIsEditing(false);
@@ -662,17 +810,101 @@ function DashboardJobs() {
               {baseResume ? 'Saved' : 'Required for Optimization'}
             </span>
           </div>
+          {baseResume && !isBaseResumeEditing ? (
+            <button
+              type="button"
+              className="preview-edit-trigger"
+              onClick={startBaseResumeEditing}
+              title="Edit base resume"
+            >
+              <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none">
+                <path
+                  d="M5 18.5 3.5 20 4 17l9.5-9.5 2 2L5 18.5Z"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <path
+                  d="m14.5 5.5 2-2 2 2-2 2-2-2Z"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </button>
+          ) : null}
         </div>
-        <p>
-          Save your base resume below. TailorAI will use it as the foundation when generating role-specific versions.
-        </p>
-        <textarea
-          className="base-resume-textarea"
-          placeholder="Paste your core resume here before tailoring it to each job."
-          value={baseResumeDraft}
-          onChange={event => setBaseResumeDraft(event.target.value)}
-          rows={10}
-        />
+        <p>TailorAI uses your base resume as the starting point for every tailored version.</p>
+
+        {isBaseResumeEditing ? (
+          <div className="job-preview-editor base-resume-editor">
+            <div className="markdown-toolbar" role="group" aria-label="Markdown formatting options">
+              <button type="button" onClick={() => applyBaseResumeMarkdown('bold')}>
+                Bold
+              </button>
+              <button type="button" onClick={() => applyBaseResumeMarkdown('italic')}>
+                Italic
+              </button>
+              <button type="button" onClick={() => applyBaseResumeMarkdown('heading')}>
+                Heading
+              </button>
+              <button type="button" onClick={() => applyBaseResumeMarkdown('bullet')}>
+                Bullet List
+              </button>
+              <button type="button" onClick={() => applyBaseResumeMarkdown('numbered')}>
+                Numbered List
+              </button>
+              <button type="button" onClick={() => applyBaseResumeMarkdown('quote')}>
+                Quote
+              </button>
+            </div>
+            <textarea
+              ref={baseResumeEditorRef}
+              className="base-resume-textarea"
+              placeholder="Paste your core resume here before tailoring it to each job."
+              value={baseResumeDraft}
+              onChange={event => setBaseResumeDraft(event.target.value)}
+              rows={12}
+            />
+            <div className="job-preview-editor-actions base-resume-editor-actions">
+              <button type="button" className="editor-cancel" onClick={cancelBaseResumeEditing}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="editor-cancel"
+                onClick={handleBaseResumeReset}
+                disabled={baseResumeDraft === baseResume}
+              >
+                Reset
+              </button>
+              <button
+                type="button"
+                className="editor-save"
+                onClick={handleBaseResumeSave}
+                disabled={baseResumeDraft.trim() === baseResume.trim()}
+              >
+                Save Base Resume
+              </button>
+            </div>
+          </div>
+        ) : baseResume ? (
+          <div className="job-preview-content base-resume-preview">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{baseResume}</ReactMarkdown>
+          </div>
+        ) : (
+          <div className="base-resume-empty">
+            <p>
+              Save your base resume to give TailorAI the right context before optimizing a job.
+            </p>
+            <button type="button" className="base-resume-button" onClick={startBaseResumeEditing}>
+              Add Base Resume
+            </button>
+          </div>
+        )}
+
         {baseResumeMessage ? (
           <p
             className={`resume-status resume-status--${baseResumeMessage.type}`}
@@ -681,24 +913,6 @@ function DashboardJobs() {
             {baseResumeMessage.text}
           </p>
         ) : null}
-        <div className="base-resume-actions">
-          <button
-            type="button"
-            className="base-resume-button base-resume-button--ghost"
-            onClick={handleBaseResumeReset}
-            disabled={baseResumeDraft === baseResume}
-          >
-            Reset
-          </button>
-          <button
-            type="button"
-            className="base-resume-button"
-            onClick={handleBaseResumeSave}
-            disabled={baseResumeDraft.trim() === baseResume.trim()}
-          >
-            Save Base Resume
-          </button>
-        </div>
       </article>
 
       {optimizeError ? (
@@ -710,15 +924,62 @@ function DashboardJobs() {
           <div className="card-header">
             <div className="card-header-main">
               <h2>Your Jobs</h2>
-              <span className="card-status">{jobs.length} saved</span>
+              <span className="card-status">{jobStatusLabel}</span>
+            </div>
+            <div className="job-list-toolbar">
+              <div className="job-search" role="search">
+                <svg
+                  className="job-search-icon"
+                  viewBox="0 0 24 24"
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  aria-hidden="true"
+                >
+                  <circle
+                    cx="11"
+                    cy="11"
+                    r="6.5"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                  />
+                  <path
+                    d="m16 16 4 4"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                  />
+                </svg>
+                <input
+                  type="search"
+                  className="job-search-input"
+                  placeholder="Search jobs"
+                  value={jobSearchTerm}
+                  onChange={event => setJobSearchTerm(event.target.value)}
+                  aria-label="Search saved jobs"
+                />
+                {jobSearchTerm ? (
+                  <button
+                    type="button"
+                    className="job-search-clear"
+                    onClick={() => setJobSearchTerm('')}
+                    aria-label="Clear job search"
+                  >
+                    ×
+                  </button>
+                ) : null}
+              </div>
             </div>
           </div>
 
-          {jobs.length === 0 ? (
-            <p className="job-list-empty">No jobs yet. Save your first job description to get started.</p>
+          {filteredJobs.length === 0 ? (
+            <p className="job-list-empty">
+              {jobs.length === 0
+                ? 'No jobs yet. Save your first job description to get started.'
+                : 'No jobs match your search. Try a different keyword.'}
+            </p>
           ) : (
             <ul className="job-list" role="list">
-              {jobs.map(job => (
+              {filteredJobs.map(job => (
                 <li
                   key={job.id}
                   className={`job-list-item${job.id === selectedJobId ? ' is-active' : ''}`}
