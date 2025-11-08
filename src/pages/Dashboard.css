@@ -339,22 +339,23 @@
 
 .base-resume-textarea {
   width: 100%;
-  min-height: 240px;
-  border-radius: 1rem;
-  padding: 1rem 1.1rem;
+  min-height: 320px;
+  border-radius: 1.1rem;
+  padding: 1rem 1.25rem;
   border: 1px solid rgba(31, 35, 51, 0.18);
-  background: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.94);
   resize: vertical;
-  font: inherit;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Source Code Pro', monospace;
+  font-size: 0.95rem;
   line-height: 1.6;
   color: inherit;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
 }
 
 .base-resume-textarea:focus {
   outline: none;
   border-color: rgba(212, 175, 112, 0.6);
-  box-shadow: 0 0 0 3px rgba(212, 175, 112, 0.2);
+  box-shadow: 0 0 0 4px rgba(212, 175, 112, 0.2);
 }
 
 .dashboard--dark .base-resume-textarea {
@@ -856,6 +857,43 @@
   box-shadow: 0 8px 18px rgba(31, 35, 51, 0.18);
 }
 
+.preview-download-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.45rem 1.1rem;
+  border-radius: 999px;
+  border: none;
+  background: linear-gradient(135deg, #d4af70 0%, #f2d492 100%);
+  color: #1f2333;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: 0 6px 18px rgba(212, 175, 112, 0.35);
+}
+
+.preview-download-button svg {
+  width: 18px;
+  height: 18px;
+}
+
+.preview-download-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 24px rgba(212, 175, 112, 0.45);
+}
+
+.preview-download-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+}
+
+.dashboard--dark .preview-download-button {
+  color: #1f2333;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.45);
+}
+
 .dashboard--dark .markdown-tips-button {
   background: rgba(19, 23, 34, 0.88);
   border-color: rgba(212, 175, 112, 0.28);
@@ -1003,7 +1041,8 @@
   height: 18px;
 }
 
-.job-preview-editor {
+.job-preview-editor,
+.base-resume-editor {
   display: flex;
   flex-direction: column;
   gap: 1rem;
@@ -1071,7 +1110,8 @@
   color: #ff9e9e;
 }
 
-.job-preview-editor-actions {
+.job-preview-editor-actions,
+.base-resume-editor-actions {
   display: flex;
   gap: 0.75rem;
   justify-content: flex-end;
@@ -1161,6 +1201,26 @@
   font-weight: 700;
 }
 
+.job-preview-content a {
+  color: #0a58c4;
+  font-weight: 600;
+  text-decoration: underline;
+}
+
+.job-preview-content a:hover,
+.job-preview-content a:focus {
+  color: #083d87;
+}
+
+.dashboard--dark .job-preview-content a {
+  color: #8ec5ff;
+}
+
+.dashboard--dark .job-preview-content a:hover,
+.dashboard--dark .job-preview-content a:focus {
+  color: #b1daff;
+}
+
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -1184,6 +1244,8 @@
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  max-height: calc(100vh - 3rem);
+  overflow-y: auto;
 }
 
 .dashboard--dark .modal {
@@ -1262,6 +1324,37 @@
   line-height: 1.5;
 }
 
+@media (max-width: 640px) {
+  .modal-overlay {
+    align-items: flex-start;
+    padding: 1rem;
+  }
+
+  .modal {
+    width: calc(100vw - 2rem);
+    padding: 1.5rem 1.25rem;
+    border-radius: 1rem;
+    max-height: calc(100vh - 2rem);
+  }
+
+  .markdown-tips-modal {
+    width: 100%;
+    gap: 1rem;
+  }
+
+  .markdown-tips-list {
+    font-size: 0.9rem;
+  }
+
+  .markdown-tips-example {
+    grid-template-columns: 1fr;
+  }
+
+  .markdown-tips-code pre {
+    font-size: 0.85rem;
+  }
+}
+
 .markdown-tips-preview-content {
   border-radius: 0.75rem;
   border: 1px solid rgba(31, 35, 51, 0.14);
@@ -1315,18 +1408,6 @@
   from {
     transform: rotate(0deg);
   }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.modal-button {
-  padding: 0.65rem 1.5rem;
-  border-radius: 999px;
-  font-weight: 600;
-  border: none;
-  cursor: pointer;
-  transition: transform 0.3s ease, box-shadow 0.3s ease, opacity 0.3s ease;
 }
 
 .modal-button:hover {

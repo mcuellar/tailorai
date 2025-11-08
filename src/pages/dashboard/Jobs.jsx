@@ -2,11 +2,14 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import html2canvas from 'html2canvas';
+import { jsPDF } from 'jspdf';
 import { formatJobDescription, optimizeResume } from '../../services/openai';
 
 const STORAGE_KEY = 'tailorai_jobs_v1';
 const BASE_RESUME_KEY = 'tailorai_base_resume_v1';
 const RESUMES_STORAGE_KEY = 'tailorai_resumes_v1';
+const BASE_RESUME_COLLAPSE_KEY = 'tailorai_base_resume_collapsed_v1';
 const PREVIEW_MODES = {
   JOB: 'job',
   RESUME: 'resume',
@@ -51,11 +54,59 @@ function DashboardJobs() {
   const [baseResumeDraft, setBaseResumeDraft] = useState('');
   const [baseResumeMessage, setBaseResumeMessage] = useState(null);
   const [isBaseResumeEditing, setIsBaseResumeEditing] = useState(false);
-  const [isBaseResumeCollapsed, setIsBaseResumeCollapsed] = useState(false);
+  const [isBaseResumeCollapsed, setIsBaseResumeCollapsed] = useState(() => {
+    if (typeof window === 'undefined') {
+      return true;
+    }
+    try {
+      const stored = window.localStorage.getItem(BASE_RESUME_COLLAPSE_KEY);
+      if (stored === 'true') return true;
+      if (stored === 'false') return false;
+    } catch {
+      // ignore storage errors and fall back to default collapsed state
+    }
+    return true;
+  });
   const [isMarkdownTipsOpen, setIsMarkdownTipsOpen] = useState(false);
+  const [isDownloadingPreview, setIsDownloadingPreview] = useState(false);
+  const [previewBanner, setPreviewBanner] = useState(null);
   const baseResumeCardRef = useRef(null);
   const baseResumeEditorRef = useRef(null);
   const editingTextareaRef = useRef(null);
+  const jobPreviewRef = useRef(null);
+  const previewBannerTimeoutRef = useRef(null);
+
+  const showPreviewBanner = nextBanner => {
+    if (typeof window !== 'undefined') {
+      window.clearTimeout(previewBannerTimeoutRef.current ?? undefined);
+    }
+
+    if (!nextBanner) {
+      setPreviewBanner(null);
+      previewBannerTimeoutRef.current = null;
+      return;
+    }
+
+    setPreviewBanner(nextBanner);
+
+    if (typeof window !== 'undefined') {
+      previewBannerTimeoutRef.current = window.setTimeout(() => {
+        setPreviewBanner(null);
+        previewBannerTimeoutRef.current = null;
+      }, 2600);
+    }
+  };
+
+  const persistBaseResumeCollapsed = nextValue => {
+    setIsBaseResumeCollapsed(nextValue);
+    if (typeof window !== 'undefined') {
+      try {
+        window.localStorage.setItem(BASE_RESUME_COLLAPSE_KEY, String(nextValue));
+      } catch {
+        // ignore storage errors
+      }
+    }
+  };
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -225,6 +276,12 @@ function DashboardJobs() {
     };
   }, [isMarkdownTipsOpen]);
 
+  useEffect(() => () => {
+    if (typeof window !== 'undefined') {
+      window.clearTimeout(previewBannerTimeoutRef.current ?? undefined);
+    }
+  }, []);
+
   const dateFormatter = useMemo(
     () =>
       typeof Intl !== 'undefined'
@@ -265,6 +322,12 @@ function DashboardJobs() {
       : selectedJob.formatted || selectedJob.original || ''
     : '';
   const optimizingLabel = optimizingJobTitle || (selectedJob ? getJobTitle(selectedJob) : 'selected job');
+  const canDownloadPreview = Boolean(
+    selectedJob &&
+      !isEditing &&
+      activePreviewContent &&
+      activePreviewContent.trim(),
+  );
 
   const handleSave = async event => {
     event.preventDefault();
@@ -287,7 +350,7 @@ function DashboardJobs() {
         createdAt: new Date().toISOString(),
       };
 
-  setJobs(prev => sortJobsByCreated([job, ...prev]));
+      setJobs(prev => sortJobsByCreated([job, ...prev]));
       setSelectedJobId(job.id);
       setJobInput('');
     } catch (formatError) {
@@ -295,6 +358,213 @@ function DashboardJobs() {
       setError(formatError.message || 'Unable to save job. Please try again.');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const createPrintablePreview = () => {
+    if (typeof document === 'undefined' || !jobPreviewRef.current) {
+      return null;
+    }
+
+    const source = jobPreviewRef.current;
+    const sourceBounds = source.getBoundingClientRect();
+    const computed = typeof window !== 'undefined' ? window.getComputedStyle(source) : null;
+    const backgroundColor = computed && computed.backgroundColor && computed.backgroundColor !== 'rgba(0, 0, 0, 0)'
+      ? computed.backgroundColor
+      : '#ffffff';
+    const textColor = computed && computed.color ? computed.color : '#1f2333';
+    const fontFamily = computed && computed.fontFamily ? computed.fontFamily : 'inherit';
+    const width = sourceBounds && sourceBounds.width ? Math.ceil(sourceBounds.width) : 680;
+
+    const wrapper = document.createElement('div');
+  wrapper.style.position = 'absolute';
+  wrapper.style.top = '-9999px';
+  wrapper.style.left = '-9999px';
+  wrapper.style.width = `${Math.max(480, width)}px`;
+  wrapper.style.maxWidth = `${Math.max(480, width)}px`;
+    wrapper.style.padding = '0';
+    wrapper.style.backgroundColor = backgroundColor;
+    wrapper.style.color = textColor;
+    wrapper.style.zIndex = '-1';
+    wrapper.style.pointerEvents = 'none';
+    wrapper.style.fontFamily = fontFamily;
+  wrapper.style.overflow = 'visible';
+  wrapper.style.lineHeight = computed && computed.lineHeight ? computed.lineHeight : 'inherit';
+
+    const clone = source.cloneNode(true);
+    clone.style.maxHeight = 'none';
+    clone.style.overflow = 'visible';
+    clone.style.paddingRight = '0';
+    clone.style.boxSizing = 'border-box';
+    clone.style.backgroundColor = backgroundColor;
+    clone.style.color = textColor;
+    clone.style.fontFamily = fontFamily;
+  clone.style.lineHeight = wrapper.style.lineHeight;
+  clone.style.width = '100%';
+  clone.style.maxWidth = '100%';
+
+    wrapper.appendChild(clone);
+    document.body.appendChild(wrapper);
+
+    return {
+      node: wrapper,
+      cleanup: () => {
+        if (wrapper.parentNode) {
+          wrapper.parentNode.removeChild(wrapper);
+        }
+      },
+    };
+  };
+
+  const createDownloadFilename = suffix => {
+    if (!selectedJob) {
+      return `tailorai-${suffix}.pdf`;
+    }
+
+    const title = getJobTitle(selectedJob);
+    const normalized = title
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 80);
+
+    const safeSlug = normalized || 'job';
+    return `${safeSlug}-${suffix}.pdf`;
+  };
+
+  const handleDownloadPreviewPdf = async () => {
+    if (!selectedJob || !jobPreviewRef.current || !canDownloadPreview) {
+      return;
+    }
+
+    setIsDownloadingPreview(true);
+    showPreviewBanner(null);
+
+    const printable = createPrintablePreview();
+    if (!printable) {
+      setIsDownloadingPreview(false);
+      showPreviewBanner({ type: 'error', text: 'Unable to prepare PDF. Please try again.' });
+      return;
+    }
+
+    try {
+      const pdf = new jsPDF({ unit: 'pt', format: 'letter', orientation: 'portrait' });
+      const suffix = previewMode === PREVIEW_MODES.RESUME ? 'resume' : 'job-description';
+      const filename = createDownloadFilename(suffix);
+      const scaleBase = typeof window !== 'undefined' && window.devicePixelRatio ? window.devicePixelRatio : 1;
+      const scale = Math.min(2.8, Math.max(1.8, scaleBase));
+
+      const captureTarget = printable.node.firstChild || printable.node;
+      const captureRect = captureTarget.getBoundingClientRect();
+      const rawAnchors = Array.from(captureTarget.querySelectorAll('a[href]')).map(anchor => {
+        const rect = anchor.getBoundingClientRect();
+        return {
+          href: anchor.getAttribute('href') || anchor.href || '',
+          left: rect.left - captureRect.left,
+          top: rect.top - captureRect.top,
+          width: rect.width,
+          height: rect.height,
+        };
+      }).filter(item => item.href && item.width > 1 && item.height > 1);
+
+      const canvas = await html2canvas(captureTarget, {
+        scale,
+        backgroundColor: '#ffffff',
+        scrollX: 0,
+        scrollY: 0,
+        useCORS: true,
+      });
+
+      const scaleFactor = captureRect.width ? canvas.width / captureRect.width : scale;
+      const anchorRegions = rawAnchors.map(anchor => ({
+        href: anchor.href,
+        leftPx: anchor.left * scaleFactor,
+        topPx: anchor.top * scaleFactor,
+        widthPx: anchor.width * scaleFactor,
+        heightPx: anchor.height * scaleFactor,
+      }));
+
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const marginX = 40;
+      const marginY = 48;
+      const printableWidth = pageWidth - marginX * 2;
+      const printableHeight = pageHeight - marginY * 2;
+      const imgWidth = printableWidth;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      const pageHeightPx = Math.floor((canvas.width * printableHeight) / imgWidth);
+      let remainingHeight = canvas.height;
+      let positionPx = 0;
+      let pageIndex = 0;
+
+      const sliceCanvas = document.createElement('canvas');
+
+      while (remainingHeight > 0) {
+        const sliceHeightPx = Math.min(pageHeightPx, remainingHeight);
+        sliceCanvas.width = canvas.width;
+        sliceCanvas.height = sliceHeightPx;
+        const sliceContext = sliceCanvas.getContext('2d');
+        if (!sliceContext) {
+          throw new Error('Unable to capture PDF slice.');
+        }
+        sliceContext.drawImage(
+          canvas,
+          0,
+          positionPx,
+          canvas.width,
+          sliceHeightPx,
+          0,
+          0,
+          canvas.width,
+          sliceHeightPx,
+        );
+
+        const sliceImageData = sliceCanvas.toDataURL('image/png');
+        const sliceHeightPdf = (sliceHeightPx * imgWidth) / canvas.width;
+
+        if (pageIndex > 0) {
+          pdf.addPage();
+        }
+
+        pdf.addImage(sliceImageData, 'PNG', marginX, marginY, imgWidth, sliceHeightPdf);
+
+        const sliceStartPx = positionPx;
+        const sliceEndPx = positionPx + sliceHeightPx;
+        anchorRegions.forEach(anchor => {
+          const anchorBottom = anchor.topPx + anchor.heightPx;
+          if (anchorBottom <= sliceStartPx || anchor.topPx >= sliceEndPx) {
+            return;
+          }
+
+          const overlapTopPx = Math.max(anchor.topPx, sliceStartPx);
+          const overlapBottomPx = Math.min(anchorBottom, sliceEndPx);
+          const overlapHeightPx = Math.max(0, overlapBottomPx - overlapTopPx);
+          const offsetWithinSlicePx = overlapTopPx - sliceStartPx;
+          const linkX = marginX + (anchor.leftPx * imgWidth) / canvas.width;
+          const linkY = marginY + (offsetWithinSlicePx * imgWidth) / canvas.width;
+          const linkWidth = (anchor.widthPx * imgWidth) / canvas.width;
+          const linkHeight = (overlapHeightPx * imgWidth) / canvas.width;
+
+          if (!linkWidth || !linkHeight) {
+            return;
+          }
+
+          pdf.link(linkX, linkY, linkWidth, linkHeight, { url: anchor.href });
+        });
+
+        remainingHeight -= sliceHeightPx;
+        positionPx += sliceHeightPx;
+        pageIndex += 1;
+      }
+
+      pdf.save(filename);
+      showPreviewBanner({ type: 'success', text: 'PDF download ready.' });
+    } catch (downloadError) {
+      console.error('[TailorAI] Unable to download preview PDF.', downloadError);
+      showPreviewBanner({ type: 'error', text: 'Unable to download PDF. Please try again.' });
+    } finally {
+      printable.cleanup();
+      setIsDownloadingPreview(false);
     }
   };
 
@@ -311,6 +581,7 @@ function DashboardJobs() {
 
     setPreviewMode(mode);
     setOptimizeError(null);
+    showPreviewBanner(null);
     setSelectedJobId(jobId);
   };
 
@@ -379,7 +650,7 @@ function DashboardJobs() {
   };
 
   const startBaseResumeEditing = () => {
-    setIsBaseResumeCollapsed(false);
+    persistBaseResumeCollapsed(false);
     setIsBaseResumeEditing(true);
     setBaseResumeDraft(baseResume);
     setBaseResumeMessage(null);
@@ -409,7 +680,7 @@ function DashboardJobs() {
     setBaseResumeDraft(trimmed);
     setBaseResumeMessage({ type: 'success', text: 'Base resume saved.' });
     setIsBaseResumeEditing(false);
-  setOptimizeError(null);
+    setOptimizeError(null);
 
     if (typeof window !== 'undefined') {
       window.clearTimeout(handleBaseResumeSave.timeoutId);
@@ -427,14 +698,14 @@ function DashboardJobs() {
 
   const toggleBaseResumeCollapsed = () => {
     if (isBaseResumeCollapsed) {
-      setIsBaseResumeCollapsed(false);
+      persistBaseResumeCollapsed(false);
       return;
     }
 
     setIsBaseResumeEditing(false);
     setBaseResumeDraft(baseResume);
     setBaseResumeMessage(null);
-    setIsBaseResumeCollapsed(true);
+    persistBaseResumeCollapsed(true);
   };
 
   const openMarkdownTips = () => {
@@ -633,6 +904,7 @@ function DashboardJobs() {
 
     setIsEditing(true);
     setEditingError(null);
+    showPreviewBanner(null);
 
     const source =
       previewMode === PREVIEW_MODES.RESUME
@@ -651,6 +923,7 @@ function DashboardJobs() {
     setIsEditing(false);
     setEditingError(null);
     setEditingContent(activePreviewContent);
+    showPreviewBanner(null);
   };
 
   const handleEditSave = () => {
@@ -947,13 +1220,13 @@ function DashboardJobs() {
               </div>
               <textarea
                 ref={baseResumeEditorRef}
-                className="base-resume-textarea"
+                className="job-preview-textarea base-resume-textarea"
                 placeholder="Paste your core resume here before tailoring it to each job."
                 value={baseResumeDraft}
                 onChange={event => setBaseResumeDraft(event.target.value)}
                 rows={12}
               />
-              <div className="job-preview-editor-actions base-resume-editor-actions">
+              <div className="base-resume-editor-actions">
                 <button type="button" className="editor-cancel" onClick={cancelBaseResumeEditing}>
                   Cancel
                 </button>
@@ -1144,6 +1417,26 @@ function DashboardJobs() {
               >
                 Markdown Tips
               </button>
+              <button
+                type="button"
+                className="preview-download-button"
+                onClick={handleDownloadPreviewPdf}
+                disabled={!canDownloadPreview || isDownloadingPreview}
+                title={canDownloadPreview ? 'Download current preview as PDF' : 'Select a job preview to download as PDF'}
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M12 3.5a.75.75 0 0 1 .75.75v7.19l2.72-2.72a.75.75 0 1 1 1.06 1.06l-4.02 4.02a.75.75 0 0 1-1.06 0L7.47 9.78a.75.75 0 0 1 1.06-1.06l2.72 2.72V4.25A.75.75 0 0 1 12 3.5Zm-7 11.75a.75.75 0 0 0-.75.75v2.25A2.25 2.25 0 0 0 6.5 20.5h11a2.25 2.25 0 0 0 2.25-2.25V16a.75.75 0 0 0-1.5 0v2.25c0 .414-.336.75-.75.75h-11a.75.75 0 0 1-.75-.75V16a.75.75 0 0 0-.75-.75Z"
+                    fill="currentColor"
+                  />
+                </svg>
+                <span>{isDownloadingPreview ? 'Preparing…' : 'Download PDF'}</span>
+              </button>
               {selectedJob && !isEditing ? (
                 <button
                   type="button"
@@ -1226,7 +1519,7 @@ function DashboardJobs() {
               </div>
             </div>
           ) : (
-            <div className="job-preview-content">
+            <div className="job-preview-content" ref={jobPreviewRef}>
               {previewMode === PREVIEW_MODES.RESUME ? (
                 selectedJob.optimizedResume ? (
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>
@@ -1244,6 +1537,14 @@ function DashboardJobs() {
               )}
             </div>
           )}
+          {previewBanner ? (
+            <p
+              className={`resume-status resume-status--${previewBanner.type}`}
+              role={previewBanner.type === 'error' ? 'alert' : 'status'}
+            >
+              {previewBanner.text}
+            </p>
+          ) : null}
         </article>
       </div>
 
