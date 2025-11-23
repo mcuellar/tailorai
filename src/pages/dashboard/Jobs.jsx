@@ -6,10 +6,10 @@ import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import { formatJobDescription, optimizeResume } from '../../services/openai';
 
-const STORAGE_KEY = 'tailorai_jobs_v1';
-const BASE_RESUME_KEY = 'tailorai_base_resume_v1';
-const RESUMES_STORAGE_KEY = 'tailorai_resumes_v1';
-const BASE_RESUME_COLLAPSE_KEY = 'tailorai_base_resume_collapsed_v1';
+const STORAGE_KEY = 'tuneit_jobs_v1';
+const BASE_RESUME_KEY = 'tuneit_base_resume_v1';
+const RESUMES_STORAGE_KEY = 'tuneit_resumes_v1';
+const BASE_RESUME_COLLAPSE_KEY = 'tuneit_base_resume_collapsed_v1';
 const PREVIEW_MODES = {
   JOB: 'job',
   RESUME: 'resume',
@@ -135,7 +135,7 @@ function DashboardJobs() {
         }
       }
     } catch (storageError) {
-      console.warn('[TailorAI] Unable to hydrate saved jobs from localStorage.', storageError);
+      console.warn('[TuneIt] Unable to hydrate saved jobs from localStorage.', storageError);
     }
   }, []);
 
@@ -147,7 +147,7 @@ function DashboardJobs() {
     try {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(jobs));
     } catch (storageError) {
-      console.warn('[TailorAI] Unable to persist jobs to localStorage.', storageError);
+      console.warn('[TuneIt] Unable to persist jobs to localStorage.', storageError);
     }
   }, [jobs]);
 
@@ -171,7 +171,7 @@ function DashboardJobs() {
     try {
       window.localStorage.setItem(RESUMES_STORAGE_KEY, JSON.stringify(snapshot));
     } catch (storageError) {
-      console.warn('[TailorAI] Unable to persist resumes snapshot to localStorage.', storageError);
+      console.warn('[TuneIt] Unable to persist resumes snapshot to localStorage.', storageError);
     }
   }, [jobs, baseResume]);
 
@@ -214,7 +214,7 @@ function DashboardJobs() {
         }
       }
     } catch (storageError) {
-      console.warn('[TailorAI] Unable to hydrate resume data from localStorage.', storageError);
+      console.warn('[TuneIt] Unable to hydrate resume data from localStorage.', storageError);
     }
   }, []);
 
@@ -230,7 +230,7 @@ function DashboardJobs() {
         setBaseResumeDraft(storedResume);
       }
     } catch (storageError) {
-      console.warn('[TailorAI] Unable to hydrate base resume from localStorage.', storageError);
+      console.warn('[TuneIt] Unable to hydrate base resume from localStorage.', storageError);
     }
   }, []);
 
@@ -242,7 +242,7 @@ function DashboardJobs() {
     try {
       window.localStorage.setItem(BASE_RESUME_KEY, baseResume);
     } catch (storageError) {
-      console.warn('[TailorAI] Unable to persist base resume to localStorage.', storageError);
+      console.warn('[TuneIt] Unable to persist base resume to localStorage.', storageError);
     }
   }, [baseResume]);
 
@@ -354,7 +354,7 @@ function DashboardJobs() {
       setSelectedJobId(job.id);
       setJobInput('');
     } catch (formatError) {
-      console.error('[TailorAI] Unable to save job description.', formatError);
+      console.error('[TuneIt] Unable to save job description.', formatError);
       setError(formatError.message || 'Unable to save job. Please try again.');
     } finally {
       setIsSaving(false);
@@ -418,7 +418,7 @@ function DashboardJobs() {
 
   const createDownloadFilename = suffix => {
     if (!selectedJob) {
-      return `tailorai-${suffix}.pdf`;
+      return `tuneit-${suffix}.pdf`;
     }
 
     const title = getJobTitle(selectedJob);
@@ -560,7 +560,7 @@ function DashboardJobs() {
       pdf.save(filename);
       showPreviewBanner({ type: 'success', text: 'PDF download ready.' });
     } catch (downloadError) {
-      console.error('[TailorAI] Unable to download preview PDF.', downloadError);
+      console.error('[TuneIt] Unable to download preview PDF.', downloadError);
       showPreviewBanner({ type: 'error', text: 'Unable to download PDF. Please try again.' });
     } finally {
       printable.cleanup();
@@ -877,7 +877,7 @@ function DashboardJobs() {
         try {
           window.localStorage.setItem(RESUMES_STORAGE_KEY, JSON.stringify(snapshot));
         } catch (snapshotError) {
-          console.warn('[TailorAI] Unable to persist optimized resume snapshot.', snapshotError);
+          console.warn('[TuneIt] Unable to persist optimized resume snapshot.', snapshotError);
         }
       }
 
@@ -885,7 +885,7 @@ function DashboardJobs() {
       setEditingContent(optimized);
       navigate('/dashboard/resumes', { state: { highlightJobId: job.id } });
     } catch (optimizationError) {
-      console.error('[TailorAI] Unable to optimize resume.', optimizationError);
+      console.error('[TuneIt] Unable to optimize resume.', optimizationError);
       setOptimizeError(optimizationError.message || 'Unable to optimize resume. Please try again.');
     } finally {
       setIsOptimizing(false);
@@ -1099,7 +1099,7 @@ function DashboardJobs() {
             <span className="card-status">AI Markdown Formatting</span>
           </div>
         </div>
-        <p>Paste a new job description below and TailorAI will polish it as Markdown once you save.</p>
+        <p>Paste a new job description below and TuneIt will polish it as Markdown once you save.</p>
 
         <form className="job-entry-form" onSubmit={handleSave}>
           <label htmlFor="job-description" className="job-entry-label">
@@ -1196,7 +1196,7 @@ function DashboardJobs() {
           ) : isBaseResumeEditing ? (
             <div className="job-preview-editor base-resume-editor">
               <p className="base-resume-lede">
-                TailorAI uses your base resume as the starting point for every tailored version.
+                TuneIt uses your base resume as the starting point for every tailored version.
               </p>
               <div className="markdown-toolbar" role="group" aria-label="Markdown formatting options">
                 <button type="button" onClick={() => applyBaseResumeMarkdown('bold')}>
@@ -1251,7 +1251,7 @@ function DashboardJobs() {
           ) : baseResume ? (
             <>
               <p className="base-resume-lede">
-                TailorAI uses your base resume as the starting point for every tailored version.
+                TuneIt uses your base resume as the starting point for every tailored version.
               </p>
               <div className="job-preview-content base-resume-preview">
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>{baseResume}</ReactMarkdown>
@@ -1260,7 +1260,7 @@ function DashboardJobs() {
           ) : (
             <div className="base-resume-empty">
               <p>
-                Save your base resume to give TailorAI the right context before optimizing a job.
+                Save your base resume to give TuneIt the right context before optimizing a job.
               </p>
               <button type="button" className="base-resume-button" onClick={startBaseResumeEditing}>
                 Add Base Resume

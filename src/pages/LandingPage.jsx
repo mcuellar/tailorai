@@ -45,7 +45,7 @@ function LandingPage() {
                 <circle cx="16" cy="20.2" r="3.4" stroke="currentColor" strokeWidth="2.6" fill="none" />
               </svg>
             </span>
-            <span className="logo-text">TailorAI</span>
+            <span className="logo-text">TuneIt</span>
           </div>
           <div className="nav-links">
             <a href="/?scroll=features" className="nav-link" onClick={e => handleNavClick(e, 'features')}>Features</a>
@@ -254,7 +254,7 @@ function LandingPage() {
         <div className="container">
           <div className="cta-content">
             <h2>Ready to Land Your Dream Job?</h2>
-            <p>Join thousands of job seekers who have optimized their resumes with TailorAI</p>
+            <p>Join thousands of job seekers who have optimized their resumes with TuneIt</p>
             <Link to="/register" className="btn-cta-large">Get Started for Free</Link>
           </div>
         </div>
@@ -278,7 +278,7 @@ function LandingPage() {
                     <circle cx="16" cy="20.2" r="3.4" stroke="currentColor" strokeWidth="2.6" fill="none" />
                   </svg>
                 </span>
-                <span className="logo-text">TailorAI</span>
+                <span className="logo-text">TuneIt</span>
               </div>
               <p>AI-powered resume optimization for job seekers.</p>
             </div>
@@ -296,7 +296,7 @@ function LandingPage() {
             </div>
           </div>
           <div className="footer-bottom">
-            <p>&copy; 2025 TailorAI. All rights reserved.</p>
+            <p>&copy; 2025 TuneIt. All rights reserved.</p>
           </div>
         </div>
       </footer>

@@ -15,7 +15,7 @@ export async function formatJobDescription(jobDescription) {
       throw new Error(STORAGE_WARNING);
     }
 
-    console.warn('[TailorAI] Missing VITE_OPENAI_API_KEY. Falling back to local formatter for development.');
+    console.warn('[TuneIt] Missing VITE_OPENAI_API_KEY. Falling back to local formatter for development.');
     return localMarkdownFallback(trimmed);
   }
 
@@ -88,7 +88,7 @@ export async function optimizeResume({ baseResume, jobDescription, jobTitle }) {
       throw new Error(STORAGE_WARNING);
     }
 
-    console.warn('[TailorAI] Missing VITE_OPENAI_API_KEY. Returning development fallback resume.');
+    console.warn('[TuneIt] Missing VITE_OPENAI_API_KEY. Returning development fallback resume.');
     return localResumeFallback(resumeTrimmed, jobTrimmed, jobTitle);
   }
 

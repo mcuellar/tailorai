@@ -1,8 +1,11 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import './Register.css';
 
 function Register() {
+  const navigate = useNavigate();
+  const { signUp, authError, clearAuthError } = useAuth();
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -12,6 +15,7 @@ function Register() {
   });
 
   const [errors, setErrors] = useState({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -25,6 +29,9 @@ function Register() {
         ...prev,
         [name]: ''
       }));
+    }
+    if (authError) {
+      clearAuthError();
     }
   };
 
@@ -61,14 +68,22 @@ function Register() {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    if (validateForm()) {
-      // Here you would typically send data to your backend
-      console.log('Form submitted:', formData);
-      alert('Registration successful! (This is a demo)');
-      // Reset form
+
+    if (!validateForm()) {
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      await signUp({
+        email: formData.email,
+        password: formData.password,
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+      });
+
       setFormData({
         firstName: '',
         lastName: '',
@@ -76,6 +91,12 @@ function Register() {
         password: '',
         confirmPassword: ''
       });
+
+      navigate('/dashboard');
+    } catch (signUpError) {
+      console.error('[TuneIt] Registration failed', signUpError);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -99,7 +120,7 @@ function Register() {
                     <circle cx="16" cy="20.2" r="3.4" stroke="currentColor" strokeWidth="2.6" fill="none" />
                   </svg>
                 </span>
-                <span className="logo-text">TailorAI</span>
+                <span className="logo-text">TuneIt</span>
               </div>
             </Link>
             <h1>Start Your Journey to Better Job Applications</h1>
@@ -204,8 +225,14 @@ function Register() {
                 {errors.confirmPassword && <span className="error-message">{errors.confirmPassword}</span>}
               </div>
 
-              <button type="submit" className="submit-btn">
-                Create Account
+              {authError ? (
+                <p className="form-error" role="alert">
+                  {authError.message || 'Registration failed. Please try again.'}
+                </p>
+              ) : null}
+
+              <button type="submit" className="submit-btn" disabled={isSubmitting}>
+                {isSubmitting ? 'Creating…' : 'Create Account'}
               </button>
 
               <div className="form-footer">

@@ -177,7 +177,7 @@ const NAV_ITEMS = [
     label: 'Settings',
     icon: SettingsIcon,
     to: '/dashboard/settings',
-    description: 'Configure TailorAI preferences and integrations.',
+    description: 'Configure TuneIt preferences and integrations.',
     end: false,
   },
 ];
@@ -260,7 +260,7 @@ function Dashboard() {
                 <circle cx="16" cy="20.2" r="3.4" stroke="currentColor" strokeWidth="2.6" fill="none" />
               </svg>
             </span>
-            <span className="sidebar-logo-text">TailorAI</span>
+            <span className="sidebar-logo-text">TuneIt</span>
           </Link>
         </div>
 

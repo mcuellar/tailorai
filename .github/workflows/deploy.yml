@@ -29,10 +29,10 @@ jobs:
         with:
           node-version: '24.3'
 
-      - name: Install TailorIA dependencies
+      - name: Install TuneIt dependencies
         run: npm install
 
-      - name: Build TailorAI
+      - name: Build TuneIt
         run: npm run build
 
       - name: Deploy to GitHub Pages

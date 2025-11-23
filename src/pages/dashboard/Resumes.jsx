@@ -4,7 +4,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import './Resumes.css';
 
-const RESUMES_STORAGE_KEY = 'tailorai_resumes_v1';
+const RESUMES_STORAGE_KEY = 'tuneit_resumes_v1';
 
 function DashboardResumes() {
   const [baseResume, setBaseResume] = useState('');
@@ -60,7 +60,7 @@ function DashboardResumes() {
           setSelectedResumeId(null);
         }
       } catch (storageError) {
-        console.warn('[TailorAI] Unable to load resumes from localStorage.', storageError);
+        console.warn('[TuneIt] Unable to load resumes from localStorage.', storageError);
       }
     };
 

@@ -1,6 +1,6 @@
-# TailorAI - AI-Powered Resume Optimizer
+# TuneIt - AI-Powered Resume Optimizer
 
-TailorAI is an AI-powered job application assistant that helps users track applications, auto-format job descriptions into markdown, and intelligently tailor resumes to match each job using OpenAI.
+TuneIt is an AI-powered job application assistant that helps users track applications, auto-format job descriptions into markdown, and intelligently tailor resumes to match each job using OpenAI.
 
 ## Features
 
@@ -14,7 +14,7 @@ TailorAI is an AI-powered job application assistant that helps users track appli
 ## Screenshots
 
 ### Landing Page
-The landing page features a modern gradient design, showcasing the key features of TailorAI.
+The landing page features a modern gradient design, showcasing the key features of TuneIt.
 
 ### Registration Page
 A clean, responsive registration form with validation and social login options.
@@ -41,6 +41,7 @@ npm --version
    ```bash
    git clone https://github.com/mcuellar/tailorai.git
    cd tailorai
+   # Repository rename to tuneit is planned; update this when the remote changes.
    ```
 
 2. **Install dependencies**
@@ -71,7 +72,7 @@ npm --version
    
    The application will be running at `http://localhost:5173/`
    
-   You should see the TailorAI landing page!
+   You should see the TuneIt landing page!
 
 ### Supabase (Local Development)
 
@@ -137,6 +138,33 @@ npm --version
 
    `supabase stop` shuts down the Docker containers. Run `supabase start` again when you’re ready to continue.
 
+### Supabase Utilities
+
+- **Print connection details (URL, keys, ports)**
+
+   ```bash
+   supabase status
+   ```
+
+   The CLI summarizes each service and prints the API URL, anon key, service key, studio URL, and edge function URL. Run it whenever you need to refresh the values in `.env.local`.
+
+- **Check container health only**
+
+   ```bash
+   supabase status --local
+   ```
+
+   Shows each service’s Docker container name, port, and health indicator. Helpful after changing project configuration (for example, the `project_id`).
+
+- **Destroy and recreate the local stack**
+
+   ```bash
+   supabase stop --all
+   supabase start
+   ```
+
+   `stop --all` removes the existing Supabase containers and network. Use it when the project id changes or the stack gets wedged. `supabase start` then provisions fresh containers and reapplies migrations.
+
 ### Available Scripts
 
 - `npm run dev` - Starts the development server with hot reload
@@ -147,7 +175,7 @@ npm --version
 ## Project Structure
 
 ```
-tailorai/
+tuneit/
 ├── src/
 │   ├── pages/
 │   │   ├── LandingPage.jsx      # Main landing page component
@@ -265,7 +293,7 @@ Your app will be live at `https://<your-username>.github.io/<your-repo>/`.
 
 ## Browser Support
 
-TailorAI works on all modern browsers:
+TuneIt works on all modern browsers:
 - Chrome (latest)
 - Firefox (latest)
 - Safari (latest)
