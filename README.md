@@ -48,6 +48,18 @@ npm --version
    npm install
    ```
 
+3. **Install Docker**
+
+   Supabase runs inside local Docker containers. Install [Docker Desktop](https://www.docker.com/products/docker-desktop/) and make sure it is running before starting Supabase.
+
+4. **Install the Supabase CLI**
+
+   ```bash
+   npm install -g supabase
+   # or on macOS
+   brew install supabase/tap/supabase
+   ```
+
 ### Running Locally
 
 1. **Start the development server**
@@ -60,6 +72,70 @@ npm --version
    The application will be running at `http://localhost:5173/`
    
    You should see the TailorAI landing page!
+
+### Supabase (Local Development)
+
+1. **Initialize Supabase (first time only)**
+
+   ```bash
+   supabase init
+   ```
+
+   This creates the `supabase/` directory with configuration, migrations, and seed hooks.
+
+2. **Start the local Supabase stack**
+
+   ```bash
+   supabase start
+   ```
+
+   The CLI spins up Postgres, Auth, and other services in Docker. The command outputs:
+
+   - `API URL` – use for `VITE_SUPABASE_URL`
+   - `anon key` – use for `VITE_SUPABASE_ANON_KEY`
+   - Studio URL – open in your browser to inspect tables/users locally
+
+   Keep this process running while you develop. To stop the containers later, run `supabase stop`.
+
+3. **Configure environment variables**
+
+   Create a `.env.local` file (git-ignored) at the project root:
+
+   ```bash
+   cp .env.local.example .env.local
+   ```
+
+   Then update the values with the URL and anon key from `supabase start`:
+
+   ```dotenv
+   VITE_SUPABASE_URL="http://127.0.0.1:54321"
+   VITE_SUPABASE_ANON_KEY="local-development-anon-key"
+   ```
+
+   Restart `npm run dev` after changes so Vite picks up the new variables.
+
+4. **Apply database migrations**
+
+   When you add or modify SQL migrations under `supabase/migrations/`, apply them with:
+
+   ```bash
+   supabase db push
+   # or to reset from scratch
+   supabase db reset
+   ```
+
+5. **Preview Auth emails locally**
+
+   During local development, Supabase writes verification and magic-link emails to the CLI output and to the Auth logs in Supabase Studio. Copy the link from those logs to simulate clicking an email.
+
+6. **Check status / clean up**
+
+   ```bash
+   supabase status
+   supabase stop
+   ```
+
+   `supabase stop` shuts down the Docker containers. Run `supabase start` again when you’re ready to continue.
 
 ### Available Scripts
 
