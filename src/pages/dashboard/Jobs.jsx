@@ -5,6 +5,7 @@ import remarkGfm from 'remark-gfm';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import { formatJobDescription, optimizeResume } from '../../services/openai';
+import { formatSalaryRange, normalizeSalaryDetails } from '../../utils/salary';
 
 const STORAGE_KEY = 'tuneit_jobs_v1';
 const BASE_RESUME_KEY = 'tuneit_base_resume_v1';
@@ -151,6 +152,7 @@ function DashboardJobs() {
               original: job.original ?? '',
               formatted: job.formatted ?? job.original ?? '',
               optimizedResume: job.optimizedResume ?? '',
+              salary: normalizeSalaryDetails(job.salary) ?? null,
             }));
 
           if (normalized.length > 0) {
@@ -329,10 +331,13 @@ function DashboardJobs() {
       const titleText = getJobTitle(job).toLowerCase();
       const jobText = `${job.formatted || ''} ${job.original || ''}`.toLowerCase();
       const resumeText = (job.optimizedResume || '').toLowerCase();
+      const salaryLabel = getJobSalaryLabel(job);
+      const salaryText = salaryLabel && salaryLabel !== 'Not provided' ? salaryLabel.toLowerCase() : '';
       return (
         titleText.includes(term) ||
         jobText.includes(term) ||
-        resumeText.includes(term)
+        resumeText.includes(term) ||
+        salaryText.includes(term)
       );
     });
   }, [jobs, jobSearchTerm]);
@@ -373,11 +378,13 @@ function DashboardJobs() {
     setError(null);
 
     try {
-      const formatted = await formatJobDescription(trimmed);
+      const { markdown: formatted, salary } = await formatJobDescription(trimmed);
+      const normalizedSalary = normalizeSalaryDetails(salary) ?? null;
       const job = {
         id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}`,
         original: trimmed,
         formatted,
+        salary: normalizedSalary,
         createdAt: new Date().toISOString(),
       };
 
@@ -1198,6 +1205,15 @@ function DashboardJobs() {
     return `${plain.slice(0, 117)}…`;
   }
 
+  function getJobSalaryLabel(job) {
+    const salaryDetails = normalizeSalaryDetails(job?.salary);
+    if (!salaryDetails) {
+      return 'Not provided';
+    }
+
+    return salaryDetails.range || formatSalaryRange(salaryDetails) || 'Not provided';
+  }
+
   return (
     <section className="dashboard-content jobs-layout">
       <article className="dashboard-card job-entry-card">
@@ -1494,6 +1510,7 @@ function DashboardJobs() {
                     >
                       <span className="job-list-title">{getJobTitle(job)}</span>
                       <span className="job-list-snippet">{getJobSnippet(job)}</span>
+                      <span className="job-list-salary">Salary: {getJobSalaryLabel(job)}</span>
                       {dateFormatter ? (
                         <span className="job-list-timestamp">
                           Saved {dateFormatter.format(new Date(job.createdAt))}

@@ -1,3 +1,13 @@
+import {
+  detectCurrencyCodeFromText,
+  detectPeriodFromText,
+  extractSalaryDetailsFromText,
+  formatSalaryAmount,
+  formatSalaryRange,
+  normalizeSalaryDetails,
+  parseSalaryNumber,
+} from '../utils/salary';
+
 const OPENAI_MODEL = 'gpt-4o-mini';
 const STORAGE_WARNING = 'Set VITE_OPENAI_API_KEY in your Vite environment to enable OpenAI formatting.';
 
@@ -16,7 +26,7 @@ export async function formatJobDescription(jobDescription) {
     }
 
     console.warn('[TuneIt] Missing VITE_OPENAI_API_KEY. Falling back to local formatter for development.');
-    return localMarkdownFallback(trimmed);
+    return buildFormattedResponse(localMarkdownFallback(trimmed), trimmed);
   }
 
   const body = {
@@ -26,11 +36,11 @@ export async function formatJobDescription(jobDescription) {
       {
         role: 'system',
         content:
-          'You are an assistant that formats job descriptions for recruiters. Return polished Markdown with clear section headings, bullet lists, and emphasis where appropriate. Do not include any commentary outside the Markdown. The very first line must be a level-one heading in the format `# Company Name: Job Title` using details found in the description.',
+          'You are an assistant that formats job descriptions for recruiters. Return polished Markdown with clear section headings, bullet lists, and emphasis where appropriate. Do not include any commentary outside the Markdown. The very first line must be a level-one heading in the format `# Company Name: Job Title` using details found in the description. After formatting every other section, append a `## Salary` section with three bullet points labeled Range, Minimum, and Maximum. Use compensation figures from the source material when available, otherwise state `Not provided`. Immediately after the Salary section, append an HTML comment exactly in the format `<!-- salary_summary: {"range":"$120k - $150k per year","min":120000,"max":150000,"currency":"USD","period":"year"} -->`. Use numeric min/max values without currency symbols or commas, ISO currency codes, and null for unknown fields. Do not wrap the comment in code fences or add any prose outside the Markdown.',
       },
       {
         role: 'user',
-        content: `Format the following job description using Markdown. Do not invent new details.\n\n${trimmed}`,
+        content: `Format the following job description using Markdown. Do not invent new details, and always follow the salary instructions above by clearly stating when data is unavailable.\n\n${trimmed}`,
       },
     ],
     max_tokens: 900,
@@ -66,7 +76,7 @@ export async function formatJobDescription(jobDescription) {
     throw new Error('OpenAI response did not include formatted content.');
   }
 
-  return normalizeMarkdown(markdown);
+  return buildFormattedResponse(markdown, trimmed);
 }
 
 export async function optimizeResume({ baseResume, jobDescription, jobTitle }) {
@@ -184,4 +194,186 @@ function normalizeMarkdown(raw) {
 
   const content = trimmed.slice(firstLineBreak + 1, fenceEnd).trim();
   return content;
+}
+
+const SALARY_COMMENT_REGEX = /<!--\s*salary_summary\s*:(.*?)-->/is;
+const SALARY_SECTION_REGEX = /(#{2,6}\s*salary\b[^\n]*)([\s\S]*?)(?=\n#{1,6}\s|$)/i;
+
+function buildFormattedResponse(rawMarkdown, sourceText) {
+  const normalized = normalizeMarkdown(rawMarkdown);
+  let { sanitizedMarkdown, salary } = extractSalaryMetadata(normalized);
+  let hasSectionFlag = hasSalarySection(sanitizedMarkdown);
+
+  if (!salary && hasSectionFlag) {
+    const derived = deriveSalaryFromSection(sanitizedMarkdown);
+    if (derived) {
+      const updated = replaceSalarySection(sanitizedMarkdown, derived);
+      ({ sanitizedMarkdown, salary } = extractSalaryMetadata(updated));
+      hasSectionFlag = hasSalarySection(sanitizedMarkdown);
+    }
+  }
+
+  if (!salary && sourceText) {
+    const extracted = extractSalaryDetailsFromText(sourceText);
+    if (extracted) {
+      const updated = hasSectionFlag
+        ? replaceSalarySection(sanitizedMarkdown, extracted)
+        : appendSalarySection(sanitizedMarkdown, extracted);
+      ({ sanitizedMarkdown, salary } = extractSalaryMetadata(updated));
+      hasSectionFlag = hasSalarySection(sanitizedMarkdown);
+    }
+  }
+
+  if (!hasSectionFlag) {
+    const withSection = appendSalarySection(sanitizedMarkdown, salary);
+    ({ sanitizedMarkdown, salary } = extractSalaryMetadata(withSection));
+    hasSectionFlag = true;
+  }
+
+  if (!salary) {
+    const withComment = appendSalaryComment(sanitizedMarkdown, getDefaultSalaryDetails());
+    ({ sanitizedMarkdown, salary } = extractSalaryMetadata(withComment));
+  }
+
+  return { markdown: sanitizedMarkdown, salary };
+}
+
+function extractSalaryMetadata(markdown) {
+  if (typeof markdown !== 'string') {
+    return { sanitizedMarkdown: '', salary: null };
+  }
+
+  let sanitizedMarkdown = markdown;
+  let salaryDetails = null;
+  const match = SALARY_COMMENT_REGEX.exec(markdown);
+
+  if (match) {
+    const jsonPayload = match[1].trim();
+    try {
+      const parsed = JSON.parse(jsonPayload);
+      salaryDetails = normalizeSalaryDetails(parsed);
+    } catch (error) {
+      console.warn('[TuneIt] Unable to parse salary metadata comment.', error);
+    }
+
+    sanitizedMarkdown = sanitizedMarkdown.replace(match[0], '').replace(/\n{3,}/g, '\n\n').trim();
+  } else {
+    sanitizedMarkdown = sanitizedMarkdown.trim();
+  }
+
+  return { sanitizedMarkdown, salary: salaryDetails };
+}
+
+function hasSalarySection(markdown) {
+  if (typeof markdown !== 'string') {
+    return false;
+  }
+  return SALARY_SECTION_REGEX.test(markdown);
+}
+
+function appendSalarySection(markdown, salaryDetails) {
+  const normalized = normalizeSalaryDetails(salaryDetails) ?? getDefaultSalaryDetails();
+  const rangeLabel = normalized.range || formatSalaryRange(normalized) || 'Not provided';
+  const minLabel = formatSalaryAmount(normalized.min, normalized.currency) || 'Not provided';
+  const maxLabel = formatSalaryAmount(normalized.max, normalized.currency) || 'Not provided';
+
+  const commentPayload = JSON.stringify({
+    range: normalized.range,
+    min: normalized.min,
+    max: normalized.max,
+    currency: normalized.currency,
+    period: normalized.period,
+  });
+
+  const sectionLines = [
+    '## Salary',
+    `- Range: ${rangeLabel}`,
+    `- Minimum: ${minLabel}`,
+    `- Maximum: ${maxLabel}`,
+    '',
+    `<!-- salary_summary: ${commentPayload} -->`,
+  ];
+
+  return `${markdown.trim()}\n\n${sectionLines.join('\n')}`.trim();
+}
+
+function replaceSalarySection(markdown, salaryDetails) {
+  const withoutSection = removeSalarySection(markdown);
+  return appendSalarySection(withoutSection, salaryDetails);
+}
+
+function removeSalarySection(markdown) {
+  if (typeof markdown !== 'string') {
+    return '';
+  }
+  return markdown.replace(SALARY_SECTION_REGEX, '').trim();
+}
+
+function appendSalaryComment(markdown, salaryDetails) {
+  const normalized = normalizeSalaryDetails(salaryDetails) ?? getDefaultSalaryDetails();
+  const commentPayload = JSON.stringify({
+    range: normalized.range,
+    min: normalized.min,
+    max: normalized.max,
+    currency: normalized.currency,
+    period: normalized.period,
+  });
+
+  return `${markdown.trim()}\n\n<!-- salary_summary: ${commentPayload} -->`;
+}
+
+function getDefaultSalaryDetails() {
+  return {
+    range: null,
+    min: null,
+    max: null,
+    currency: null,
+    period: null,
+  };
+}
+
+function deriveSalaryFromSection(markdown) {
+  const sectionBody = getSalarySectionBody(markdown);
+  if (!sectionBody) {
+    return null;
+  }
+
+  const rangeMatch = /(?:-|\*)\s*Range:\s*(.+)/i.exec(sectionBody);
+  const minMatch = /(?:-|\*)\s*Minimum:\s*(.+)/i.exec(sectionBody);
+  const maxMatch = /(?:-|\*)\s*Maximum:\s*(.+)/i.exec(sectionBody);
+
+  if (!rangeMatch && !minMatch && !maxMatch) {
+    return null;
+  }
+
+  const range = rangeMatch ? rangeMatch[1].trim() : null;
+  const min = minMatch ? parseSalaryNumber(minMatch[1]) : null;
+  const max = maxMatch ? parseSalaryNumber(maxMatch[1]) : null;
+
+  const currencySource = rangeMatch?.[1] || minMatch?.[1] || maxMatch?.[1] || '';
+  const periodSource = rangeMatch?.[1] || sectionBody;
+
+  const currency = detectCurrencyCodeFromText(currencySource);
+  const period = detectPeriodFromText(periodSource);
+
+  return normalizeSalaryDetails({
+    range,
+    min,
+    max,
+    currency,
+    period,
+  });
+}
+
+function getSalarySectionBody(markdown) {
+  if (typeof markdown !== 'string') {
+    return null;
+  }
+
+  const match = SALARY_SECTION_REGEX.exec(markdown);
+  if (!match) {
+    return null;
+  }
+
+  return match[2].trim();
 }
