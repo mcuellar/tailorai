@@ -10,6 +10,7 @@ const STORAGE_KEY = 'tuneit_jobs_v1';
 const BASE_RESUME_KEY = 'tuneit_base_resume_v1';
 const RESUMES_STORAGE_KEY = 'tuneit_resumes_v1';
 const BASE_RESUME_COLLAPSE_KEY = 'tuneit_base_resume_collapsed_v1';
+const JOB_LIST_COLLAPSE_KEY = 'tuneit_job_list_collapsed_v1';
 const PREVIEW_MODES = {
   JOB: 'job',
   RESUME: 'resume',
@@ -67,6 +68,20 @@ function DashboardJobs() {
     }
     return true;
   });
+  const [isJobListCollapsed, setIsJobListCollapsed] = useState(() => {
+    if (typeof window === 'undefined') {
+      return false;
+    }
+    try {
+      const stored = window.localStorage.getItem(JOB_LIST_COLLAPSE_KEY);
+      if (stored === 'true') return true;
+      if (stored === 'false') return false;
+    } catch {
+      // ignore storage errors and fall back to default expanded state
+    }
+    return false;
+  });
+  const [isCompareView, setIsCompareView] = useState(false);
   const [isMarkdownTipsOpen, setIsMarkdownTipsOpen] = useState(false);
   const [isDownloadingPreview, setIsDownloadingPreview] = useState(false);
   const [previewBanner, setPreviewBanner] = useState(null);
@@ -102,6 +117,17 @@ function DashboardJobs() {
     if (typeof window !== 'undefined') {
       try {
         window.localStorage.setItem(BASE_RESUME_COLLAPSE_KEY, String(nextValue));
+      } catch {
+        // ignore storage errors
+      }
+    }
+  };
+
+  const persistJobListCollapsed = nextValue => {
+    setIsJobListCollapsed(nextValue);
+    if (typeof window !== 'undefined') {
+      try {
+        window.localStorage.setItem(JOB_LIST_COLLAPSE_KEY, String(nextValue));
       } catch {
         // ignore storage errors
       }
@@ -316,6 +342,11 @@ function DashboardJobs() {
     : `${jobs.length} saved`;
 
   const selectedJob = jobs.find(job => job.id === selectedJobId) || null;
+  useEffect(() => {
+    if (!selectedJob && isCompareView) {
+      setIsCompareView(false);
+    }
+  }, [selectedJob, isCompareView]);
   const activePreviewContent = selectedJob
     ? previewMode === PREVIEW_MODES.RESUME
       ? selectedJob.optimizedResume || ''
@@ -708,6 +739,10 @@ function DashboardJobs() {
     persistBaseResumeCollapsed(true);
   };
 
+  const toggleJobListCollapsed = () => {
+    persistJobListCollapsed(!isJobListCollapsed);
+  };
+
   const openMarkdownTips = () => {
     setIsMarkdownTipsOpen(true);
   };
@@ -893,6 +928,27 @@ function DashboardJobs() {
     }
   };
   
+  const toggleCompareView = () => {
+    if (!selectedJob || isEditing) {
+      return;
+    }
+    setIsCompareView(prev => !prev);
+    showPreviewBanner(null);
+  };
+
+  const handleFocusPreviewPane = pane => {
+    if (!selectedJob) {
+      return;
+    }
+    if (pane === PREVIEW_MODES.RESUME && !selectedJob.optimizedResume) {
+      setOptimizeError('Optimize this job to generate a tailored resume.');
+      return;
+    }
+    setPreviewMode(pane);
+    setOptimizeError(null);
+    showPreviewBanner(null);
+  };
+
   const startEditing = () => {
     if (!selectedJob) {
       return;
@@ -902,6 +958,7 @@ function DashboardJobs() {
       return;
     }
 
+    setIsCompareView(false);
     setIsEditing(true);
     setEditingError(null);
     showPreviewBanner(null);
@@ -964,6 +1021,57 @@ function DashboardJobs() {
     setIsEditing(false);
     setEditingError(null);
     setEditingContent(trimmed);
+  };
+
+  const renderJobPaneContent = ref => {
+    if (!selectedJob) {
+      return (
+        <p className="job-preview-empty">
+          Select a job to see the AI-formatted Markdown preview.
+        </p>
+      );
+    }
+
+    const jobContent = selectedJob.formatted || selectedJob.original;
+    if (!jobContent) {
+      return (
+        <p className="job-preview-empty">
+          This job does not have content yet. Paste a description to get started.
+        </p>
+      );
+    }
+
+    return (
+      <div className="job-preview-content" ref={ref ?? undefined}>
+        <ReactMarkdown remarkPlugins={[remarkGfm]}>{jobContent}</ReactMarkdown>
+      </div>
+    );
+  };
+
+  const renderResumePaneContent = ref => {
+    if (!selectedJob) {
+      return (
+        <p className="job-preview-empty">
+          Select a job to view its tailored resume once optimized.
+        </p>
+      );
+    }
+
+    if (!selectedJob.optimizedResume) {
+      return (
+        <p className="job-preview-empty">
+          Optimize this job to generate and view a tailored resume.
+        </p>
+      );
+    }
+
+    return (
+      <div className="job-preview-content" ref={ref ?? undefined}>
+        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+          {selectedJob.optimizedResume}
+        </ReactMarkdown>
+      </div>
+    );
   };
 
   const applyMarkdownSnippet = action => {
@@ -1290,115 +1398,146 @@ function DashboardJobs() {
               <h2>Your Jobs</h2>
               <span className="card-status">{jobStatusLabel}</span>
             </div>
-            <div className="job-list-toolbar">
-              <div className="job-search" role="search">
+            <div className="card-header-actions job-list-header-actions">
+              <div className="job-list-toolbar">
+                <div className="job-search" role="search">
+                  <svg
+                    className="job-search-icon"
+                    viewBox="0 0 24 24"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    aria-hidden="true"
+                  >
+                    <circle
+                      cx="11"
+                      cy="11"
+                      r="6.5"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                    />
+                    <path
+                      d="m16 16 4 4"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                  <input
+                    type="search"
+                    className="job-search-input"
+                    placeholder="Search jobs"
+                    value={jobSearchTerm}
+                    onChange={event => setJobSearchTerm(event.target.value)}
+                    aria-label="Search saved jobs"
+                  />
+                  {jobSearchTerm ? (
+                    <button
+                      type="button"
+                      className="job-search-clear"
+                      onClick={() => setJobSearchTerm('')}
+                      aria-label="Clear job search"
+                    >
+                      ×
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+              <button
+                type="button"
+                className={`collapse-toggle${isJobListCollapsed ? ' is-collapsed' : ''}`}
+                onClick={toggleJobListCollapsed}
+                aria-expanded={!isJobListCollapsed}
+                aria-controls="job-list-panel"
+              >
+                <span>{isJobListCollapsed ? 'Expand' : 'Collapse'}</span>
                 <svg
-                  className="job-search-icon"
                   viewBox="0 0 24 24"
                   xmlns="http://www.w3.org/2000/svg"
                   fill="none"
                   aria-hidden="true"
                 >
-                  <circle
-                    cx="11"
-                    cy="11"
-                    r="6.5"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                  />
                   <path
-                    d="m16 16 4 4"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                    strokeLinecap="round"
+                    d={isJobListCollapsed ? 'M12 9l6 6H6l6-6Z' : 'M12 15l-6-6h12l-6 6Z'}
+                    fill="currentColor"
                   />
                 </svg>
-                <input
-                  type="search"
-                  className="job-search-input"
-                  placeholder="Search jobs"
-                  value={jobSearchTerm}
-                  onChange={event => setJobSearchTerm(event.target.value)}
-                  aria-label="Search saved jobs"
-                />
-                {jobSearchTerm ? (
-                  <button
-                    type="button"
-                    className="job-search-clear"
-                    onClick={() => setJobSearchTerm('')}
-                    aria-label="Clear job search"
-                  >
-                    ×
-                  </button>
-                ) : null}
-              </div>
+              </button>
             </div>
           </div>
 
-          {filteredJobs.length === 0 ? (
-            <p className="job-list-empty">
-              {jobs.length === 0
-                ? 'No jobs yet. Save your first job description to get started.'
-                : 'No jobs match your search. Try a different keyword.'}
-            </p>
-          ) : (
-            <ul className="job-list" role="list">
-              {filteredJobs.map(job => (
-                <li
-                  key={job.id}
-                  className={`job-list-item${job.id === selectedJobId ? ' is-active' : ''}`}
-                >
-                  <button
-                    type="button"
-                    className="job-list-trigger"
-                    onClick={() => handleSelectJob(job.id)}
-                    aria-pressed={job.id === selectedJobId}
+          <div
+            id="job-list-panel"
+            className={`job-list-panel${isJobListCollapsed ? ' is-collapsed' : ''}`}
+          >
+            {isJobListCollapsed ? (
+              <p className="job-list-collapsed-message">
+                Job list hidden. Expand to manage and optimize saved postings.
+              </p>
+            ) : filteredJobs.length === 0 ? (
+              <p className="job-list-empty">
+                {jobs.length === 0
+                  ? 'No jobs yet. Save your first job description to get started.'
+                  : 'No jobs match your search. Try a different keyword.'}
+              </p>
+            ) : (
+              <ul className="job-list" role="list">
+                {filteredJobs.map(job => (
+                  <li
+                    key={job.id}
+                    className={`job-list-item${job.id === selectedJobId ? ' is-active' : ''}`}
                   >
-                    <span className="job-list-title">{getJobTitle(job)}</span>
-                    <span className="job-list-snippet">{getJobSnippet(job)}</span>
-                    {dateFormatter ? (
-                      <span className="job-list-timestamp">
-                        Saved {dateFormatter.format(new Date(job.createdAt))}
-                      </span>
-                    ) : null}
-                  </button>
-                  <div className="job-list-actions">
                     <button
                       type="button"
-                      className="job-action-button job-action-button--ghost"
-                      onClick={() => handleSelectJob(job.id, PREVIEW_MODES.JOB)}
+                      className="job-list-trigger"
+                      onClick={() => handleSelectJob(job.id)}
+                      aria-pressed={job.id === selectedJobId}
                     >
-                      View JD
+                      <span className="job-list-title">{getJobTitle(job)}</span>
+                      <span className="job-list-snippet">{getJobSnippet(job)}</span>
+                      {dateFormatter ? (
+                        <span className="job-list-timestamp">
+                          Saved {dateFormatter.format(new Date(job.createdAt))}
+                        </span>
+                      ) : null}
                     </button>
-                    <button
-                      type="button"
-                      className="job-action-button job-action-button--ghost"
-                      onClick={() => handleSelectJob(job.id, PREVIEW_MODES.RESUME)}
-                      title={job.optimizedResume ? 'View tailored resume' : 'Optimize this job to view the tailored resume'}
-                      disabled={!job.optimizedResume}
-                    >
-                      View Resume
-                    </button>
-                    <button
-                      type="button"
-                      className="job-action-button"
-                      onClick={() => handleOptimizeResume(job)}
-                      disabled={isOptimizing}
-                    >
-                      Optimize
-                    </button>
-                    <button
-                      type="button"
-                      className="job-action-button job-action-button--danger"
-                      onClick={() => handleDeleteRequest(job)}
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
+                    <div className="job-list-actions">
+                      <button
+                        type="button"
+                        className="job-action-button job-action-button--ghost"
+                        onClick={() => handleSelectJob(job.id, PREVIEW_MODES.JOB)}
+                      >
+                        View JD
+                      </button>
+                      <button
+                        type="button"
+                        className="job-action-button job-action-button--ghost"
+                        onClick={() => handleSelectJob(job.id, PREVIEW_MODES.RESUME)}
+                        title={job.optimizedResume ? 'View tailored resume' : 'Optimize this job to view the tailored resume'}
+                        disabled={!job.optimizedResume}
+                      >
+                        View Resume
+                      </button>
+                      <button
+                        type="button"
+                        className="job-action-button"
+                        onClick={() => handleOptimizeResume(job)}
+                        disabled={isOptimizing}
+                      >
+                        Optimize
+                      </button>
+                      <button
+                        type="button"
+                        className="job-action-button job-action-button--danger"
+                        onClick={() => handleDeleteRequest(job)}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </article>
 
         <article className="dashboard-card job-preview-card">
@@ -1410,6 +1549,15 @@ function DashboardJobs() {
               </span>
             </div>
             <div className="card-header-actions">
+              <button
+                type="button"
+                className={`compare-toggle${isCompareView ? ' is-active' : ''}`}
+                onClick={toggleCompareView}
+                aria-pressed={isCompareView}
+                disabled={!selectedJob || isEditing}
+              >
+                {isCompareView ? 'Single View' : 'Compare View'}
+              </button>
               <button
                 type="button"
                 className="markdown-tips-button"
@@ -1518,24 +1666,48 @@ function DashboardJobs() {
                 </button>
               </div>
             </div>
-          ) : (
-            <div className="job-preview-content" ref={jobPreviewRef}>
-              {previewMode === PREVIEW_MODES.RESUME ? (
-                selectedJob.optimizedResume ? (
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                    {selectedJob.optimizedResume}
-                  </ReactMarkdown>
-                ) : (
-                  <p className="job-preview-empty">
-                    Optimize this job to generate and view a tailored resume.
-                  </p>
-                )
-              ) : (
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                  {selectedJob.formatted || selectedJob.original}
-                </ReactMarkdown>
-              )}
+          ) : isCompareView ? (
+            <div className="job-preview-compare">
+              <section className="job-preview-pane" aria-label="Job description preview">
+                <div className="job-preview-pane-header">
+                  <div className="pane-header-text">
+                    <span className="pane-title">Job Description</span>
+                    <span className="pane-subtitle">AI-formatted Markdown</span>
+                  </div>
+                  <button
+                    type="button"
+                    className={`pane-focus-toggle${previewMode === PREVIEW_MODES.JOB ? ' is-active' : ''}`}
+                    onClick={() => handleFocusPreviewPane(PREVIEW_MODES.JOB)}
+                    aria-pressed={previewMode === PREVIEW_MODES.JOB}
+                  >
+                    {previewMode === PREVIEW_MODES.JOB ? 'Active' : 'Set Active'}
+                  </button>
+                </div>
+                {renderJobPaneContent(previewMode === PREVIEW_MODES.JOB ? jobPreviewRef : null)}
+              </section>
+              <section className="job-preview-pane" aria-label="Tailored resume preview">
+                <div className="job-preview-pane-header">
+                  <div className="pane-header-text">
+                    <span className="pane-title">Tailored Resume</span>
+                    <span className="pane-subtitle">Optimization Output</span>
+                  </div>
+                  <button
+                    type="button"
+                    className={`pane-focus-toggle${previewMode === PREVIEW_MODES.RESUME ? ' is-active' : ''}`}
+                    onClick={() => handleFocusPreviewPane(PREVIEW_MODES.RESUME)}
+                    aria-pressed={previewMode === PREVIEW_MODES.RESUME}
+                    disabled={!selectedJob.optimizedResume}
+                  >
+                    {previewMode === PREVIEW_MODES.RESUME ? 'Active' : 'Set Active'}
+                  </button>
+                </div>
+                {renderResumePaneContent(previewMode === PREVIEW_MODES.RESUME ? jobPreviewRef : null)}
+              </section>
             </div>
+          ) : previewMode === PREVIEW_MODES.RESUME ? (
+            renderResumePaneContent(jobPreviewRef)
+          ) : (
+            renderJobPaneContent(jobPreviewRef)
           )}
           {previewBanner ? (
             <p
