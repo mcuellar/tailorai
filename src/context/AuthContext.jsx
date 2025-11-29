@@ -41,7 +41,37 @@ export function AuthProvider({ children }) {
     return data;
   };
 
-  const ensureProfile = async user => {
+  const createProfileRecord = async ({ userId, firstName, lastName }) => {
+    if (!userId) {
+      throw new Error('Missing user ID for profile creation.');
+    }
+
+    const payload = {
+      user_id: userId,
+      first_name: firstName?.trim() || 'Friend',
+      last_name: lastName?.trim() || 'of TuneIt',
+    };
+
+    const { data, error } = await supabase
+      .from('profiles')
+      .insert(payload)
+      .select('*')
+      .single();
+
+    if (error) {
+      if (error.code === '23505') {
+        // Profile already exists for this user; fetch the latest copy.
+        return fetchProfile(userId);
+      }
+
+      throw error;
+    }
+
+    setProfile(data);
+    return data;
+  };
+
+  const ensureProfile = async (user, overrides = {}) => {
     if (!user) {
       return null;
     }
@@ -51,25 +81,10 @@ export function AuthProvider({ children }) {
       return existing;
     }
 
-    const firstName = user.user_metadata?.first_name || '';
-    const lastName = user.user_metadata?.last_name || '';
+    const firstName = overrides.firstName ?? user.user_metadata?.first_name ?? '';
+    const lastName = overrides.lastName ?? user.user_metadata?.last_name ?? '';
 
-    const { data, error } = await supabase
-      .from('profiles')
-      .insert({
-        user_id: user.id,
-        first_name: firstName || 'Friend',
-        last_name: lastName || 'of TuneIt',
-      })
-      .select('*')
-      .single();
-
-    if (error) {
-      throw error;
-    }
-
-    setProfile(data);
-    return data;
+    return createProfileRecord({ userId: user.id, firstName, lastName });
   };
 
   useEffect(() => {
@@ -135,13 +150,16 @@ export function AuthProvider({ children }) {
       throw error;
     }
 
-    if (signUpSession?.user) {
-      await ensureProfile(signUpSession.user);
-    } else if (user) {
+    const targetUser = signUpSession?.user || user;
+    if (targetUser) {
       try {
-        await ensureProfile(user);
+        await ensureProfile(targetUser, {
+          firstName,
+          lastName,
+        });
       } catch (profileError) {
         console.error('[TuneIt] Unable to create profile after sign up.', profileError);
+        throw profileError;
       }
     }
 
